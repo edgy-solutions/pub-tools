@@ -1,0 +1,19 @@
+# pub_tools Project Context
+This document provides high-level context for AI tools and agents exploring this repository.
+
+## Domain
+`pub_tools` is a high-performance data ingestion pipeline project built for processing large, public government datasets, notably the Defense Logistics Agency (DLA) PUB LOG dataset.
+
+## Architecture
+The core architecture consists of two main technologies:
+1.  **Dagster**: The orchestration engine. All pipelines, schedules, and assets are defined as Dagster `@asset` or `@job` components.
+2.  **dlt (data load tool)**: The data movement framework. Instead of writing custom ETL logic, we use `dlt`'s `@dlt.resource` generators to efficiently stream large, unstructured flat-files (like pipe-delimited `|` text files) directly into destinations.
+
+## Infrastructure
+The target destination for the ingested datasets is an Amazon S3-backed Data Lake, formatted as **Parquet** (`dlt[s3,parquet]`). The pipelines are designed to handle full-fidelity, memory-efficient streams of massive flat files.
+
+## Local Execution
+The project is executable locally for development and testing:
+```bash
+uv run dagster dev
+```

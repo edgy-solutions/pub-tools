@@ -1,0 +1,30 @@
+---
+description: Coding standards and technology stack rules for the pub-tools repository.
+---
+
+# `pub-tools` Tech Stack & Rules
+
+This project uses a modern Python data engineering stack centered around orchestration and fast ingestion.
+
+## 1. Dependency Management (`uv`)
+- **Rule**: NEVER use `pip`, `poetry`, or `conda` directly. 
+- **Tool**: Always use `uv` for all environment and dependency management.
+- **Commands**: 
+  - Install dependencies: `uv add <package>`
+  - Run scripts: `uv run <script>`
+  - Sync lockfile: `uv sync`
+  - Start Dagster: `uv run dagster dev`
+
+## 2. Orchestration (`dagster`)
+- **Rule**: All data workflows must be defined as Dagster `@asset`s or `@job`s. 
+- **Architecture**: Do not write standalone cron scripts. Everything must be executable within the Dagster UI/Daemon.
+
+## 3. Data Ingestion (`dlt`)
+- **Rule**: Avoid writing custom requests/pandas ETL logic for moving data from A to B.
+- **Tool**: Use `dlthub` (`dlt`) to create robust, streaming pipelines capable of handling massive files (like DLA flat-files).
+- **Format**: All data lake destinations should write in Parquet format (`dlt[parquet]`) using the filesystem/S3 destination.
+
+## 4. Python Style
+- **Type Hinting**: All function signatures must include strict Python type hints (e.g., `def parse(row: dict) -> Iterator[str]:`).
+- **Docstrings**: Provide a brief Google-style or standard docstring explaining the purpose of complex parsing functions and all Dagster assets. 
+- **Efficiency**: When processing flat files (like PUB LOG), always use generators (`yield`) instead of loading entire files into memory (no massive `pd.read_csv`).

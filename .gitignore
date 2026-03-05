@@ -1,0 +1,13 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Dagster temporary directories
+.tmp_dagster_home_*/

@@ -1,0 +1,101 @@
+name: Build Container Image
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Generate requirements.txt from pyproject.toml
+        run: |
+          uv export --format requirements-txt --no-hashes > requirements.txt
+
+      - name: Inject Golden Dockerfile
+        run: |
+          # 1. Create the Dockerignore (Keeps context small so build starts instantly)
+          cat << 'EOF' > .dockerignore
+          .git
+          .github
+          .venv
+          venv
+          __pycache__
+          *.pyc
+          data/
+          tests/
+          *.egg-info
+          EOF
+          
+          # 2. Create the Single-Stage Dockerfile
+          cat << 'EOF' > Dockerfile
+          # syntax=docker/dockerfile:1
+          FROM python:3.12-slim
+
+          # Set environment variables so Python prints directly to logs
+          ENV PYTHONUNBUFFERED=1
+          ENV PYTHONDONTWRITEBYTECODE=1
+
+          # Pull uv binary for blazing-fast dependency installation
+          COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+          WORKDIR /app
+
+          # Create a standard virtual environment and install dependencies
+          RUN uv venv /app/venv
+          COPY requirements.txt /app/
+          
+          RUN --mount=type=cache,target=/root/.cache/uv \
+              uv pip install --python /app/venv -r /app/requirements.txt
+
+          # Copy the application code
+          COPY . /app
+
+          # Put the virtual environment in the PATH so 'dagster' commands work natively
+          ENV PATH="/app/venv/bin:$PATH"
+          ENV PYTHONPATH="/app"
+
+          # Standard Dagster Webserver command for User Deployment
+          CMD ["dagster-webserver", "-h", "0.0.0.0", "-p", "8080", "-m", "pub_tools.definitions"]
+          EOF
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        run: |
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "image=ghcr.io/$REPO_LOWER" >> "$GITHUB_OUTPUT"
+
+      - name: Build and Push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ steps.meta.outputs.image }}:latest
+            ${{ steps.meta.outputs.image }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
