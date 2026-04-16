@@ -24,7 +24,7 @@ jobs:
 
       - name: Generate requirements.txt from pyproject.toml
         run: |
-          uv export --format requirements-txt --no-hashes > requirements.txt
+          uv export --format requirements-txt --no-hashes --no-emit-project > requirements.txt
 
       - name: Inject Golden Dockerfile
         run: |
