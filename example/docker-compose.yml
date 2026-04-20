@@ -21,6 +21,7 @@ services:
       - DESTINATION__FILESYSTEM__CREDENTIALS__ENDPOINT_URL=http://minio:9000
     volumes:
       - ../pub_tools:/app/pub_tools
+      - ./verify_parquet.py:/app/verify_parquet.py
     depends_on:
       minio-setup:
         condition: service_completed_successfully

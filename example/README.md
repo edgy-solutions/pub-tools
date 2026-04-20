@@ -42,6 +42,15 @@ It sets up:
 5. The pipeline will download the PUB LOG dataset, extract it, and use `dlt` to stream the Parquet files into the local MinIO bucket.
 6. Once completed, you can view the resulting Parquet files in the MinIO Console at [http://localhost:9001](http://localhost:9001) under the `publog-lake` bucket.
 
+## Verifying the Data
+
+To ensure the pipeline successfully wrote the Parquet files with the correct schema and data, you can run the provided verification script. This script connects to MinIO, reads the Parquet file, and prints its schema and row count.
+
+Run the following command:
+```bash
+docker-compose exec dagster uv run python /app/verify_parquet.py
+```
+
 ## Stopping the Example
 
 To stop the services and remove the containers, run:
