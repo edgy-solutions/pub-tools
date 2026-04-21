@@ -24,3 +24,6 @@ build-backend = "hatchling.build"
 [tool.dagster]
 module_name = "pub_tools.definitions"
 code_location_name = "pub_tools"
+
+[tool.dagster.components]
+register_components = ["pub_tools.components"]

@@ -1,9 +1,7 @@
-from dagster import Definitions, load_assets_from_modules
+import os
+from pathlib import Path
+from dagster import Definitions
+from dagster.components import build_component_defs
 
-from pub_tools import assets  # noqa: TID252
-
-all_assets = load_assets_from_modules([assets])
-
-defs = Definitions(
-    assets=all_assets,
-)
+components_dir = Path(__file__).parent / "components"
+defs = build_component_defs(components_dir)

@@ -1,0 +1,14 @@
+type: pub_tools.components.publog_pipeline.PublogPipelineComponent
+
+attributes:
+  publog_url: "{{ env('PUBLOG_URL', 'https://www.dla.mil/Portals/104/Documents/LogisticsOps/FLIS/PUBLOG_FLIS_Data_Flat_Files.zip') }}"
+  dataset_name: "{{ env('DATASET_NAME', 'publog') }}"
+
+  dest_config:
+    drivername: filesystem
+    destination:
+      bucket_url: "{{ env('PUBLOG_S3_BUCKET_URL', 's3://publog-lake') }}"
+    credentials:
+      aws_access_key_id: "{{ env('AWS_ACCESS_KEY_ID', 'minioadmin') }}"
+      aws_secret_access_key: "{{ env('AWS_SECRET_ACCESS_KEY', 'minioadmin') }}"
+      endpoint_url: "{{ env('AWS_ENDPOINT_URL', 'http://minio:9000') }}"
