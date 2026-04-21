@@ -38,11 +38,15 @@ class PublogPipelineComponent(Component, Resolvable, Model):
             dataset_name = f"{dataset_name_prefix}_{as_of_date.replace('-', '_')}"
             
             drivername = dest_config.get("drivername", "filesystem")
+            
             if drivername == "filesystem":
-                for key, value in dest_config.get("destination", {}).items():
-                    os.environ[f"DESTINATION__FILESYSTEM__{key.upper()}"] = str(value)
-                for key, value in dest_config.get("credentials", {}).items():
-                    os.environ[f"DESTINATION__FILESYSTEM__CREDENTIALS__{key.upper()}"] = str(value)
+                from dlt.destinations import filesystem
+                destination_obj = filesystem(
+                    bucket_url=bucket_url,
+                    credentials=dest_config.get("credentials", {})
+                )
+            else:
+                destination_obj = drivername
 
             with tempfile.TemporaryDirectory() as temp_dir:
                 context.log.info(f"Downloading DLA PUB LOG to temporary directory: {temp_dir}")
@@ -56,7 +60,7 @@ class PublogPipelineComponent(Component, Resolvable, Model):
 
                 pipeline = dlt.pipeline(
                     pipeline_name=f"publog_lake_pipeline_{as_of_date}",
-                    destination=drivername,
+                    destination=destination_obj,
                     dataset_name=dataset_name 
                 )
 

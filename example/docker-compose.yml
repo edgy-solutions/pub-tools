@@ -15,10 +15,6 @@ services:
       - AWS_ACCESS_KEY_ID=minioadmin
       - AWS_SECRET_ACCESS_KEY=minioadmin
       - AWS_ENDPOINT_URL=http://minio:9000
-      # Required for dlt S3 filesystem destination
-      - DESTINATION__FILESYSTEM__CREDENTIALS__AWS_ACCESS_KEY_ID=minioadmin
-      - DESTINATION__FILESYSTEM__CREDENTIALS__AWS_SECRET_ACCESS_KEY=minioadmin
-      - DESTINATION__FILESYSTEM__CREDENTIALS__ENDPOINT_URL=http://minio:9000
     volumes:
       - ../pub_tools:/app/pub_tools
       - ./verify_parquet.py:/app/verify_parquet.py
