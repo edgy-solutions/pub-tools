@@ -6,8 +6,9 @@ This project is orchestrated by [Dagster](https://dagster.io/) and uses [dlt (da
 
 ## Architecture & Tooling
 
-*   **Orchestration**: Dagster (`@asset`)
+*   **Orchestration**: Dagster (`@asset` and declarative Components)
 *   **Data Movement**: `dlt` (`@dlt.resource` generators)
+*   **Configuration**: Dagster declarative components (`component.yaml`)
 *   **Destination**: Parquet formatting on local filesystem (`/tmp`) or AWS S3 (`s3://...`).
 *   **Package Management**: `uv`
 

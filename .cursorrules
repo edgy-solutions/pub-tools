@@ -16,8 +16,8 @@ This project uses a modern Python data engineering stack centered around orchest
   - Start Dagster: `uv run dagster dev`
 
 ## 2. Orchestration (`dagster`)
-- **Rule**: All data workflows must be defined as Dagster `@asset`s or `@job`s. 
-- **Architecture**: Do not write standalone cron scripts. Everything must be executable within the Dagster UI/Daemon.
+- **Rule**: All data workflows must be defined as Dagster `@asset`s, `@job`s, or declarative components.
+- **Architecture**: Do not write standalone cron scripts. Everything must be executable within the Dagster UI/Daemon. Use Dagster's declarative component framework (`component.yaml`) for configuring pipelines.
 
 ## 3. Data Ingestion (`dlt`)
 - **Rule**: Avoid writing custom requests/pandas ETL logic for moving data from A to B.

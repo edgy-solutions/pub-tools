@@ -6,7 +6,7 @@ Welcome, AI Agent! When interacting with this project, you must adhere strictly 
 Before modifying *any* code or executing external network commands, you **MUST**:
 1. Read `README.md` to understand the current scaffolding and execution paths.
 2. Read `llms.txt` to align your semantic context with the core business logic (DLA PUB LOG ingestion).
-3. Read `.cursorrules` to ensure your proposed edits comply with the strict tech stack (`uv`, Dagster `@asset`, `dlt`, Parquet destination).
+3. Read `.cursorrules` to ensure your proposed edits comply with the strict tech stack (`uv`, Dagster `@asset`/components, `dlt`, Parquet destination).
 
 ## Operational Safety Boundaries
 

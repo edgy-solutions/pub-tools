@@ -6,7 +6,7 @@ This document provides high-level context for AI tools and agents exploring this
 
 ## Architecture
 The core architecture consists of two main technologies:
-1.  **Dagster**: The orchestration engine. All pipelines, schedules, and assets are defined as Dagster `@asset` or `@job` components.
+1.  **Dagster**: The orchestration engine. All pipelines, schedules, and assets are defined as Dagster `@asset` or `@job` components, and configured via declarative component YAML files.
 2.  **dlt (data load tool)**: The data movement framework. Instead of writing custom ETL logic, we use `dlt`'s `@dlt.resource` generators to efficiently stream large, unstructured flat-files (like pipe-delimited `|` text files) directly into destinations.
 
 ## Infrastructure
