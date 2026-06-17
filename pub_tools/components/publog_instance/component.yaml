@@ -1,8 +1,11 @@
 type: pub_tools.components.publog_pipeline.PublogPipelineComponent
 
 attributes:
-  publog_url: "{{ env('PUBLOG_URL', 'https://www.dla.mil/Portals/104/Documents/LogisticsOps/FLIS/PUBLOG_FLIS_Data_Flat_Files.zip') }}"
   dataset_name: "{{ env('DATASET_NAME', 'publog') }}"
+
+  monthly_cron_schedule: "{{ env('PUBLOG_MONTHLY_CRON', '0 14 2 * *') }}"
+  quarterly_cron_schedule: "{{ env('PUBLOG_QUARTERLY_CRON', '0 14 2 1,4,7,10 *') }}"
+  schedule_timezone: "{{ env('PUBLOG_SCHEDULE_TZ', 'UTC') }}"
 
   dest_config:
     drivername: filesystem
