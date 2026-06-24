@@ -57,10 +57,16 @@ jobs:
 
           WORKDIR /app
 
+          # git is required for any `pip install git+https://...` dep
+          # (e.g. dag-tools) that uv needs to clone before resolving.
+          RUN apt-get update \
+              && apt-get install -y --no-install-recommends git \
+              && rm -rf /var/lib/apt/lists/*
+
           # Create a standard virtual environment and install dependencies
           RUN uv venv /app/venv
           COPY requirements.txt /app/
-          
+
           RUN --mount=type=cache,target=/root/.cache/uv \
               uv pip install --python /app/venv -r /app/requirements.txt
 
