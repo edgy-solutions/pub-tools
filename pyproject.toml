@@ -10,20 +10,15 @@ dependencies = [
     "dagster-postgres",
     "dlt[parquet,s3]>=1.22.2",
     "requests>=2.32.5",
-    # Provides dag_tools.domain_broker (the broker FastAPI that
-    # pub-tools' chart deploys as a second pod against this same
-    # image, with a different startup command). Same pattern any
+    # Provides dag_tools.domain_broker (the FastAPI broker that the
+    # iagent chart deploys as a second pod against this same image,
+    # with a different startup command). The [broker] extras group
+    # pulls in fastapi/hypercorn/httpx/pydantic/boto3 so the broker
+    # pod can boot without a runtime pip install. Same pattern any
     # Dagster user-deployment uses to participate in an iagent mesh:
-    # add dag-tools as a dep, run the broker module against your own
-    # definitions module.
-    "dag-tools @ git+https://github.com/edgy-solutions/dag-tools.git@master",
-    # The broker is a FastAPI app served by hypercorn — the user-
-    # deployment image needs these so the broker pod can boot without
-    # an extra runtime pip install.
-    "fastapi",
-    "hypercorn",
-    "httpx",
-    "pydantic",
+    # add dag-tools[broker] as a dep, run the broker module against
+    # your own Definitions module.
+    "dag-tools[broker] @ git+https://github.com/edgy-solutions/dag-tools.git@master",
 ]
 
 [project.optional-dependencies]
