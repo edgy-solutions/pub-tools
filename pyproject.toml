@@ -14,6 +14,11 @@ dependencies = [
     # rather than relying on dlt's transitive deps because the arm64
     # wheel resolution can miss it under uv on aarch64 GitHub runners.
     "pandas",
+    # dag_tools.io_managers.s3 imports dagster_aws.s3.io_manager — pulled
+    # into our import chain via the mesh_demo component's reference to
+    # dag_tools.io_managers.cortex_io_manager (which lives in the same
+    # package and triggers __init__ side effects).
+    "dagster-aws",
     # Provides dag_tools.domain_broker (the FastAPI broker that the
     # iagent chart deploys as a second pod against this same image,
     # with a different startup command). The [broker] extras group
