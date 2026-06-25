@@ -19,6 +19,12 @@ dependencies = [
     # dag_tools.io_managers.cortex_io_manager (which lives in the same
     # package and triggers __init__ side effects).
     "dagster-aws",
+    # DataHub publishing — dag_tools.components.datahub_lineage builds a
+    # make_datahub_sensor that emits asset materializations to DataHub.
+    # acryl-datahub provides DataHubGraph; datahub-dagster-plugin
+    # provides the sensor factory + DagsterGenerator.
+    "acryl-datahub",
+    "acryl-datahub-dagster-plugin",
     # Provides dag_tools.domain_broker (the FastAPI broker that the
     # iagent chart deploys as a second pod against this same image,
     # with a different startup command). The [broker] extras group
