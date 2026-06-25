@@ -81,6 +81,13 @@ jobs:
           CMD ["dagster-webserver", "-h", "0.0.0.0", "-p", "8080", "-m", "pub_tools.definitions"]
           EOF
 
+      - name: Set up QEMU
+        # Required so the amd64 runner can build the arm64 layer under
+        # emulation. The iagent k3s cluster runs on arm64 nodes; an
+        # amd64-only image fails to schedule there with "no match for
+        # platform in manifest."
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -114,5 +121,6 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
