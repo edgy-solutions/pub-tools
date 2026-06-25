@@ -1,0 +1,21 @@
+type: pub_tools.components.mesh_demo.MeshDemoComponent
+
+attributes:
+  # Bucket where mesh_demo_customers writes its parquet. Must match the
+  # bucket the broker pod's IO manager instance sees so the routing
+  # ticket it advertises points at the same location handle_output
+  # writes to. Override via PUBLOG_S3_BUCKET (without the s3:// prefix).
+  s3_bucket: "{{ env('PUBLOG_S3_BUCKET', 'publog-lake') }}"
+  prefix: "{{ env('MESH_DEMO_PREFIX', 'mesh_demo') }}"
+
+  # Central gateway URL — required by CortexPolarsIOManager's schema
+  # even when the asset doesn't read upstreams. The demo asset only
+  # produces, so client_id/client_secret stay empty (the consumer side
+  # only needs them when fetching upstreams through the gateway).
+  broker_url: "{{ env('CENTRAL_GATEWAY_URL', 'http://iagent-central-gateway:8090') }}"
+  client_id: "{{ env('CORTEX_CLIENT_ID', '') }}"
+  client_secret: "{{ env('CORTEX_CLIENT_SECRET', '') }}"
+  keycloak_url: "{{ env('KEYCLOAK_TOKEN_URL', '') }}"
+
+  asset_name: "mesh_demo_customers"
+  asset_group: "mesh_demo"
