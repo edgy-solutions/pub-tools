@@ -10,6 +10,10 @@ dependencies = [
     "dagster-postgres",
     "dlt[parquet,s3]>=1.22.2",
     "requests>=2.32.5",
+    # publog_csv_resource uses pandas for CSV ingest. Declared explicitly
+    # rather than relying on dlt's transitive deps because the arm64
+    # wheel resolution can miss it under uv on aarch64 GitHub runners.
+    "pandas",
     # Provides dag_tools.domain_broker (the FastAPI broker that the
     # iagent chart deploys as a second pod against this same image,
     # with a different startup command). The [broker] extras group
