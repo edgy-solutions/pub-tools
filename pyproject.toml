@@ -34,9 +34,15 @@ dependencies = [
     # pulls in fastapi/hypercorn/httpx/pydantic/boto3 so the broker
     # pod can boot without a runtime pip install. Same pattern any
     # Dagster user-deployment uses to participate in an iagent mesh:
-    # add dag-tools[broker] as a dep, run the broker module against
-    # your own Definitions module.
-    "dag-tools[broker] @ git+https://github.com/edgy-solutions/dag-tools.git@master",
+    # add edgy-dag-tools[broker] as a dep, run the broker module
+    # against your own Definitions module.
+    #
+    # The distribution is `edgy-dag-tools`, not `dag-tools`: PyPI's
+    # confusable-name check rejects dag-tools (it collapses to
+    # "dagtools", which is taken). The requirement name must match the
+    # package's own metadata or uv fails to build the git dependency.
+    # The import name is unaffected and stays `dag_tools`.
+    "edgy-dag-tools[broker] @ git+https://github.com/edgy-solutions/dag-tools.git@master",
 ]
 
 [project.optional-dependencies]
