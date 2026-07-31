@@ -37,9 +37,28 @@ It sets up:
 
 1. Open the Dagster UI at [http://localhost:3000](http://localhost:3000).
 2. Navigate to the **Assets** tab.
-3. Click on the `publog_lake_export` asset.
-4. Click **Materialize** to start the pipeline.
-5. The pipeline will download the PUB LOG dataset, extract it, and use `dlt` to stream the Parquet files into the local MinIO bucket.
+3. Select the `publog_ingestion` asset group. It contains two kinds of asset:
+   - `publog/source/<name>` — one per PUB LOG source archive (`publog/source/cage`,
+     `publog/source/history`, ...), the unit of download and execution.
+   - `publog/<table>` — one per CSV inside those archives (`publog/v_cage_address`,
+     `publog/v_flis_identification`, ...), each depending on its source archive.
+     These are what downstream assets should depend on.
+4. Materialize the whole group for a full snapshot, or a single source archive to
+   ingest just that file.
+5. Each source archive downloads, extracts, and loads in its own step, so they run
+   in parallel subprocesses (3 at a time by default; see `max_concurrent`), retry
+   independently, and log per-file read progress and row counts as they go. The
+   resulting Parquet lands in the MinIO bucket at
+   `<dataset>/<table>/*.parquet`.
+
+To depend on a PUB LOG table from your own asset:
+
+```python
+from dagster import AssetKey, asset
+
+@asset(deps=[AssetKey(["publog", "v_flis_identification"])])
+def my_downstream_model(): ...
+```
 6. Once completed, you can view the resulting Parquet files in the MinIO Console at [http://localhost:9001](http://localhost:9001) under the `publog-lake` bucket.
 
 ## Verifying the Data
