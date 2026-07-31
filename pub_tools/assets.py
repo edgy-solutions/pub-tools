@@ -10,12 +10,10 @@ outright. Python `requests` happens to slip through with a recent Chrome
 User-Agent; do NOT "clean up" the UA below without testing against the live
 endpoint, or ingest will silently 403.
 """
-import csv
 import os
 import zipfile
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Dict, List, Optional
 
-import dlt
 import requests
 
 PUBLOG_USER_AGENT = (
@@ -162,7 +160,8 @@ def source_filename(url: str) -> str:
 def table_name_for(csv_member: str) -> str:
     """dlt table name for a CSV member: `V_CAGE_ADDRESS.CSV` -> `v_cage_address`.
 
-    Must stay in agreement with the table naming in `publog_csv_resource`.
+    Determines the asset key of the table, so it must stay in agreement with
+    the Parquet path that `pub_tools.lake.table_parquet_url` writes.
     """
     return os.path.splitext(os.path.basename(csv_member))[0].lower()
 
@@ -223,90 +222,10 @@ def download_url(session: requests.Session, url: str, dest_path: str) -> None:
                     f.write(chunk)
 
 
-def fetch_url_to_dir(session: requests.Session, url: str, dest_dir: str) -> List[str]:
-    """Download url into dest_dir. If it's a zip, extract and return the list
-    of contained CSV paths. If it's a bare CSV, return [downloaded path].
-    """
-    os.makedirs(dest_dir, exist_ok=True)
-    filename = source_filename(url)
-    local_path = os.path.join(dest_dir, filename)
-    download_url(session, url, local_path)
-
-    if filename.lower().endswith(".zip"):
-        with zipfile.ZipFile(local_path) as z:
-            z.extractall(dest_dir)
-            csvs = [
-                os.path.join(dest_dir, n)
-                for n in z.namelist()
-                if n.lower().endswith(".csv") and not n.endswith("/")
-            ]
-        os.remove(local_path)
-        return csvs
-
-    if filename.lower().endswith(".csv"):
-        return [local_path]
-
-    raise ValueError(f"Unsupported PUB LOG file type for url: {url}")
-
-
-def _clean_header(s: str) -> str:
-    return (
-        s.strip()
-        .replace(" ", "_")
-        .replace(".", "_")
-        .replace("-", "_")
-        .replace("/", "_")
-        .lower()
-    )
-
-
-@dlt.resource(name="publog_table", write_disposition="replace")
-def publog_csv_resource(
-    csv_paths: List[str],
-    log: Optional[Any] = None,
-    row_counts: Optional[Dict[str, int]] = None,
-    progress_every: int = 250_000,
-) -> Iterator[dict]:
-    """Stream rows from each CSV, routing to a dlt table named after the file.
-
-    The dlt load is by far the longest phase of ingest and emits no output of
-    its own, so an unprogressed run is indistinguishable from a hung one. Pass
-    `log` (a Dagster logger) to get a line per file plus a heartbeat every
-    `progress_every` rows, and `row_counts` (a dict this mutates in place) to
-    recover per-table totals for materialization metadata.
-    """
-    for i, csv_path in enumerate(csv_paths, start=1):
-        table_name = os.path.splitext(os.path.basename(csv_path))[0].lower()
-        size_mb = os.path.getsize(csv_path) / (1024 * 1024)
-        if log:
-            log.info(
-                "[%d/%d] reading %s (%.1f MiB) -> table %s",
-                i, len(csv_paths), os.path.basename(csv_path), size_mb, table_name,
-            )
-        rows = 0
-        with open(csv_path, "r", encoding="utf-8", errors="replace", newline="") as f:
-            reader = csv.reader(f)
-            try:
-                raw_headers = next(reader)
-            except StopIteration:
-                if log:
-                    log.warning("[%d/%d] %s is empty; skipping", i, len(csv_paths), table_name)
-                continue
-            headers = [_clean_header(h) for h in raw_headers]
-            for row in reader:
-                if len(row) < len(headers):
-                    row = row + [""] * (len(headers) - len(row))
-                elif len(row) > len(headers):
-                    row = row[: len(headers)]
-                record = dict(zip(headers, row))
-                rows += 1
-                if log and rows % progress_every == 0:
-                    log.info("[%d/%d] %s: %s rows read...", i, len(csv_paths), table_name, f"{rows:,}")
-                yield dlt.mark.with_table_name(record, table_name)
-        if row_counts is not None:
-            row_counts[table_name] = rows
-        if log:
-            log.info("[%d/%d] %s: %s rows read", i, len(csv_paths), table_name, f"{rows:,}")
+# Extraction lives in pub_tools.lake.stage_zip_to_lake, which streams members
+# from the archive straight into object storage rather than expanding them onto
+# local disk first. Column-name cleaning lives in pub_tools.lake.clean_header,
+# alongside the DuckDB projection that applies it.
 
 
 def load_previous_last_modified(

@@ -1,20 +1,16 @@
-import os
 import re
-import tempfile
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import dlt
 from dagster import (
     AssetExecutionContext,
     AssetKey,
     AssetSelection,
-    AssetSpec,
     Definitions,
     MaterializeResult,
     ScheduleDefinition,
+    asset,
     define_asset_job,
-    multi_asset,
 )
 from dagster.components import Component, ComponentLoadContext
 from dagster.components.resolved.base import Resolvable
@@ -23,28 +19,26 @@ from dagster.components.resolved.model import Model
 from pub_tools.assets import (
     PUBLOG_MONTHLY_URLS,
     PUBLOG_QUARTERLY_URLS,
+    PUBLOG_SOURCE_MANIFEST,
     fetch_last_modified,
-    fetch_url_to_dir,
-    load_previous_last_modified,
-    manifest_tables,
-    publog_csv_resource,
     publog_session,
     source_filename,
     table_name_for,
 )
-
-
-def _build_destination(dest_config: Dict[str, Any], default_bucket_url: str):
-    bucket_url = dest_config.get("destination", {}).get("bucket_url") or default_bucket_url
-    drivername = dest_config.get("drivername", "filesystem")
-    if drivername == "filesystem":
-        from dlt.destinations import filesystem
-
-        return filesystem(
-            bucket_url=bucket_url,
-            credentials=dest_config.get("credentials", {}),
-        ), bucket_url
-    return drivername, bucket_url
+from pub_tools.lake import (
+    csv_to_parquet,
+    duckdb_connection,
+    marker_url,
+    object_exists,
+    object_mtime,
+    raw_csv_url,
+    raw_prefix,
+    read_marker,
+    stage_zip_to_lake,
+    storage_options,
+    table_parquet_url,
+    write_marker,
+)
 
 
 def _current_quarter_start() -> str:
@@ -59,170 +53,209 @@ def source_slug(url: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", stem.lower()).strip("_")
 
 
-def _ingest_source(
+def _lake_root(dest_config: Dict[str, Any], default_bucket_url: str) -> str:
+    return (dest_config.get("destination", {}) or {}).get("bucket_url") or default_bucket_url
+
+
+def _stage_source(
     context: AssetExecutionContext,
     url: str,
-    bundle_key: AssetKey,
-    table_keys: Dict[str, AssetKey],
+    members: List[str],
     as_of_date: str,
-    dataset_name: str,
-    pipeline_name: str,
+    lake_root: str,
     dest_config: Dict[str, Any],
-    default_bucket_url: str,
-):
-    """Download one PUB LOG source file and load its CSVs via dlt, emitting one
-    MaterializeResult for the source bundle and one per declared table.
-
-    Skips download and load entirely when the source's Last-Modified header is
-    unchanged since the bundle's previous materialization.
-    """
-    selected = context.selected_asset_keys
+) -> MaterializeResult:
+    """Stage one source archive's CSVs into the lake under `_raw/`."""
     session = publog_session()
+    slug = source_slug(url)
+    options = storage_options(dest_config)
+    prefix = raw_prefix(lake_root, as_of_date, slug)
+    marker = marker_url(lake_root, as_of_date, slug)
 
     lm = fetch_last_modified(session, url)
     if lm is None:
         raise RuntimeError(f"No Last-Modified header for {url}")
-    current_lm = {url: lm}
 
-    previous_lm = load_previous_last_modified(context, asset_key=bundle_key)
-    if previous_lm == current_lm:
-        context.log.info("%s unchanged since last load (%s); skipping.", url, lm)
-        skipped = {
-            "skipped_reason": "no source changes",
-            "source_last_modified": current_lm,
+    # Freshness comes from the lake, not from Dagster's event log -- see the
+    # note in pub_tools.lake. The marker records which source version produced
+    # the staged files; it is only trusted if those files are still present.
+    previous = read_marker(marker, options)
+    if previous and previous.get("source_last_modified") == lm:
+        absent = [
+            m for m in members
+            if not object_exists(raw_csv_url(lake_root, as_of_date, slug, m), options)
+        ]
+        if not absent:
+            context.log.info(
+                "%s unchanged since last staging (%s) and all %d CSV(s) still "
+                "present; leaving staged copies in place.",
+                url, lm, len(members),
+            )
+            return MaterializeResult(
+                metadata={
+                    "skipped_reason": "no source changes",
+                    "source_last_modified": lm,
+                    "as_of_date": as_of_date,
+                    "url": url,
+                    "raw_prefix": prefix,
+                }
+            )
+        context.log.warning(
+            "%s is unchanged, but %d staged CSV(s) are missing from the lake "
+            "(%s); re-staging.", url, len(absent), ", ".join(absent),
+        )
+
+    staged = stage_zip_to_lake(
+        session=session,
+        url=url,
+        lake_root=lake_root,
+        as_of_date=as_of_date,
+        slug=slug,
+        members=members,
+        dest_config=dest_config,
+        log=context.log,
+    )
+    if not staged:
+        raise RuntimeError(f"No CSV members were staged from {url}; aborting.")
+
+    missing = sorted({m for m in members} - set(staged))
+    if missing:
+        context.log.warning(
+            "%s is missing %d member(s) declared in PUBLOG_SOURCE_MANIFEST: %s. "
+            "Their table assets will fail until the manifest is regenerated.",
+            url, len(missing), ", ".join(missing),
+        )
+
+    total_mb = sum(v["size_bytes"] for v in staged.values()) / (1024 * 1024)
+    context.log.info("Staged %d CSV(s), %.1f MiB total.", len(staged), total_mb)
+
+    # Written last, so an interrupted staging leaves no marker and the next run
+    # re-stages rather than trusting a half-written prefix.
+    write_marker(
+        marker,
+        {
+            "url": url,
+            "source_last_modified": lm,
+            "as_of_date": as_of_date,
+            "members": sorted(staged),
+        },
+        options,
+    )
+
+    return MaterializeResult(
+        metadata={
+            "source_last_modified": lm,
             "as_of_date": as_of_date,
             "url": url,
+            "raw_prefix": prefix,
+            "staged_csv_count": len(staged),
+            "staged_bytes": sum(v["size_bytes"] for v in staged.values()),
+            "staged_members": sorted(staged),
+            "missing_members": missing,
         }
-        for key in [bundle_key, *table_keys.values()]:
-            if key in selected:
-                yield MaterializeResult(asset_key=key, metadata=skipped)
-        return
+    )
 
-    destination_obj, bucket_url = _build_destination(dest_config, default_bucket_url)
 
-    with tempfile.TemporaryDirectory() as temp_root:
-        context.log.info("Downloading %s", url)
-        csvs = fetch_url_to_dir(session, url, temp_root)
-        if not csvs:
-            raise RuntimeError(f"No CSV files extracted from {url}; aborting load.")
-        extracted_mb = sum(os.path.getsize(p) for p in csvs) / (1024 * 1024)
-        context.log.info("  -> %d CSV(s) extracted, %.1f MiB total", len(csvs), extracted_mb)
+def _convert_table(
+    context: AssetExecutionContext,
+    url: str,
+    member: str,
+    table: str,
+    as_of_date: str,
+    dataset_name: str,
+    lake_root: str,
+    dest_config: Dict[str, Any],
+    compression: str,
+) -> MaterializeResult:
+    """Convert one staged CSV into one Parquet table."""
+    slug = source_slug(url)
+    options = storage_options(dest_config)
+    csv_url = raw_csv_url(lake_root, as_of_date, slug, member)
+    parquet_url = table_parquet_url(lake_root, dataset_name, table)
 
-        # Reconcile the checked-in manifest against what the archive actually
-        # holds. Undeclared tables still load -- dropping data silently would be
-        # worse than an un-keyed table -- but they have no asset to attach to,
-        # so say so loudly enough that someone regenerates the manifest.
-        found = {table_name_for(p) for p in csvs}
-        undeclared = sorted(found - set(table_keys))
-        missing = sorted(set(table_keys) - found)
-        if undeclared:
-            context.log.warning(
-                "%s contains %d table(s) absent from PUBLOG_SOURCE_MANIFEST: %s. "
-                "They will load into the lake but have no asset key; regenerate "
-                "the manifest to make them addressable downstream.",
-                url, len(undeclared), ", ".join(undeclared),
-            )
-        if missing:
-            context.log.warning(
-                "%s is missing %d table(s) declared in PUBLOG_SOURCE_MANIFEST: %s. "
-                "Their assets will not be materialized this run.",
-                url, len(missing), ", ".join(missing),
-            )
+    csv_mtime = object_mtime(csv_url, options)
+    if csv_mtime is None:
+        raise RuntimeError(
+            f"Staged CSV {csv_url} does not exist. Materialize "
+            f"{AssetKey([context.asset_key.path[0], 'source', slug]).to_user_string()} "
+            f"first, or re-run it if the raw staging area was cleared."
+        )
 
+    # Rebuild only when the input is newer than the output. Both timestamps come
+    # from the same store, so they are comparable, and a deleted or truncated
+    # Parquet simply rebuilds rather than being reported as fresh.
+    parquet_mtime = object_mtime(parquet_url, options)
+    if parquet_mtime is not None and parquet_mtime >= csv_mtime:
         context.log.info(
-            "Loading %d CSV file(s) via dlt -> %s (dataset %s). This is the long "
-            "phase; per-file progress follows.",
-            len(csvs), bucket_url, dataset_name,
+            "%s is already newer than its staged CSV; skipping conversion.", table
         )
-        row_counts: Dict[str, int] = {}
-        pipeline = dlt.pipeline(
-            pipeline_name=pipeline_name,
-            destination=destination_obj,
-            dataset_name=dataset_name,
-        )
-        load_info = pipeline.run(
-            publog_csv_resource(csvs, log=context.log, row_counts=row_counts),
-            loader_file_format="parquet",
-        )
-        context.log.info(
-            "Loaded %s rows across %d table(s).",
-            f"{sum(row_counts.values()):,}", len(row_counts),
-        )
-        context.log.info(str(load_info))
-
-    if bundle_key in selected:
-        yield MaterializeResult(
-            asset_key=bundle_key,
+        return MaterializeResult(
             metadata={
-                "destination_bucket_url": bucket_url,
+                "skipped_reason": "parquet already newer than staged CSV",
                 "as_of_date": as_of_date,
-                "dlt_pipeline_name": pipeline.pipeline_name,
-                "dlt_dataset_name": dataset_name,
-                "url": url,
-                "csv_count": len(csvs),
-                "row_count": sum(row_counts.values()),
-                "rows_per_table": row_counts,
-                "undeclared_tables": undeclared,
-                "missing_tables": missing,
-                "source_last_modified": current_lm,
-            },
+                "table": table,
+                "table_path": parquet_url,
+                "source_csv": csv_url,
+            }
         )
 
-    for table, key in table_keys.items():
-        if key not in selected or table in missing:
-            continue
-        yield MaterializeResult(
-            asset_key=key,
-            metadata={
-                "dagster/row_count": row_counts.get(table, 0),
-                "as_of_date": as_of_date,
-                "dlt_table": table,
-                "dlt_dataset_name": dataset_name,
-                "table_path": f"{bucket_url.rstrip('/')}/{dataset_name}/{table}",
-                "source_url": url,
-                "source_last_modified": lm,
-            },
+    con = duckdb_connection(dest_config)
+    try:
+        rows = csv_to_parquet(
+            con, csv_url, parquet_url, compression=compression, log=context.log
         )
+    finally:
+        con.close()
+
+    return MaterializeResult(
+        metadata={
+            "dagster/row_count": rows,
+            "as_of_date": as_of_date,
+            "table": table,
+            "table_path": parquet_url,
+            "source_csv": csv_url,
+            "source_url": url,
+        }
+    )
 
 
 class PublogPipelineComponent(Component, Resolvable, Model):
     """Ingests DLA PUB LOG CSV data from the FLIS Electronic Reading Room.
 
-    Creates one `@multi_asset` per source file. Each emits:
+    Two stages, one Dagster asset per unit of work:
 
-      * `<key_prefix>/source/<slug>` -- the source bundle, carrying download and
-        load metadata for the whole zip
-      * `<key_prefix>/<table>` -- one asset per CSV in that zip, e.g.
-        `publog/v_cage_address`, each depending on its bundle
+      * `<key_prefix>/source/<slug>` -- downloads a source archive and streams
+        each CSV member into the lake under `_raw/<as_of>/<slug>/`.
+      * `<key_prefix>/<table>` -- converts one staged CSV into one Parquet
+        table with DuckDB, e.g. `publog/v_cage_address`.
 
-    So downstream code depends on individual tables
-    (`deps=[AssetKey(["publog", "v_flis_identification"])]`) while the zip
-    remains the unit of execution: one source file, one step, one subprocess
-    under the multiprocess executor. That gives parallelism, independent retry,
-    per-source skip granularity, and bounds peak disk to `max_concurrent`
-    sources' extracted CSVs rather than all of them at once.
+    Every table is its own step, so conversions run in parallel, retry
+    individually, and can be materialized on their own without re-downloading
+    a several-hundred-megabyte archive. Downstream code depends on the table
+    it actually needs:
+
+        @asset(deps=[AssetKey(["publog", "v_flis_identification"])])
 
     Table asset keys come from `PUBLOG_SOURCE_MANIFEST`, since Dagster needs
-    keys at definition time but a zip's members are only knowable after
-    download. Ingest reconciles manifest against archive at runtime and warns
-    on drift.
+    keys at definition time but an archive's members are only knowable after
+    download. Staging reconciles manifest against archive and warns on drift.
 
-    Each source is incremental at the run level: if its URL's Last-Modified
-    header is unchanged since the bundle's previous successful materialization,
-    the run skips downloading and dlt loading and records a `skipped_reason`.
+    Both stages are incremental. Staging skips when the source's Last-Modified
+    is unchanged; a conversion skips when the table was already built from that
+    same source version.
     """
 
     monthly_urls: List[str] = PUBLOG_MONTHLY_URLS
-    """Full URLs of monthly zip files; one multi_asset is created per entry."""
+    """Full URLs of monthly source files."""
 
     quarterly_urls: List[str] = PUBLOG_QUARTERLY_URLS
-    """Full URLs of quarterly files; one per entry (set [] to disable)."""
+    """Full URLs of quarterly source files (set [] to disable)."""
 
     dest_config: Dict[str, Any]
     """Destination credentials and bucket configuration (dlt filesystem-style)."""
 
     dataset_name: Optional[str] = None
-    """Prefix for dlt dataset names; defaulted to 'publog'."""
+    """Prefix for lake dataset names; defaulted to 'publog'."""
 
     key_prefix: str = "publog"
     """Leading component of every generated asset key."""
@@ -232,10 +265,14 @@ class PublogPipelineComponent(Component, Resolvable, Model):
 
     asset_group: str = "publog_ingestion"
 
-    max_concurrent: int = 3
-    """Steps run in parallel per job. Each concurrent step holds one source's
-    extracted CSVs plus dlt's staged parquet on the run worker's ephemeral
-    disk, so raise this only alongside the pod's storage limit."""
+    parquet_compression: str = "zstd"
+    """DuckDB Parquet codec: zstd, snappy, gzip, or uncompressed."""
+
+    max_concurrent: int = 6
+    """Steps run in parallel per job. Staging holds one compressed archive on
+    the run worker's disk; conversions stream object storage and hold neither
+    input nor output locally, so this is bounded by memory and network rather
+    than disk."""
 
     monthly_cron_schedule: str = "0 14 2 * *"
     """Cron for monthly ingest. Default: 14:00 UTC on day 2 of each month
@@ -251,79 +288,86 @@ class PublogPipelineComponent(Component, Resolvable, Model):
         urls: List[str],
         as_of_fn,
         dataset_name_prefix: str,
-        pipeline_name_prefix: str,
-        bucket_url_prefix: str,
+        default_bucket_url: str,
     ):
-        """One multi_asset per URL. Loop variables are bound as closure defaults
-        so each asset captures its own source rather than the last one.
+        """Build the staging asset and per-table conversion assets for each URL.
 
-        `as_of_fn` is evaluated at execution time, not definition time -- a code
-        server can stay up across a month boundary, and every derived name must
-        come from the one call so they cannot disagree.
+        Loop variables are bound as closure defaults so every asset captures its
+        own source. `as_of_fn` is evaluated at execution time, not definition
+        time -- a code server can stay up across a month boundary, and every
+        derived name must come from the one call so they cannot disagree.
         """
         dest_config = self.dest_config
-        assets = []
+        compression = self.parquet_compression
+        lake_root = _lake_root(dest_config, default_bucket_url)
+        staging_assets, table_assets = [], []
 
         for url in urls:
             slug = source_slug(url)
-            bundle_key = AssetKey([self.key_prefix, "source", slug])
-            table_keys = {
-                table: AssetKey([self.key_prefix, table]) for table in manifest_tables(url)
-            }
-
             filename = source_filename(url)
-            specs = [
-                AssetSpec(
-                    key=bundle_key,
-                    group_name=self.asset_group,
-                    skippable=True,
-                    kinds={"file"},
-                    description=f"PUB LOG source archive {filename}.",
-                    metadata={"source_url": url, "declared_tables": sorted(table_keys)},
-                )
-            ]
-            specs += [
-                AssetSpec(
-                    key=key,
-                    deps=[bundle_key],
-                    group_name=self.asset_group,
-                    skippable=True,
-                    kinds={"parquet", "dlt"},
-                    description=f"PUB LOG table `{table}`, from {filename}.",
-                    metadata={"source_url": url, "dlt_table": table},
-                )
-                for table, key in table_keys.items()
-            ]
+            members = PUBLOG_SOURCE_MANIFEST[filename]
+            bundle_key = AssetKey([self.key_prefix, "source", slug])
 
-            # multi_asset reads the compute function's signature as asset INPUTS,
-            # so extra parameters cannot be used to bind loop variables the way
-            # they can with @asset. Build each closure in its own scope instead.
-            def make_compute(url=url, slug=slug, bundle_key=bundle_key, table_keys=table_keys):
-                def _compute(context: AssetExecutionContext):
-                    as_of_date = as_of_fn()
-                    yield from _ingest_source(
+            # A Dagster asset function's parameters are INPUTS, not a place to
+            # bind loop variables -- doing that silently invents upstream assets
+            # named after the parameters. Build each closure in its own scope.
+            def make_staging(url=url, members=members):
+                def _compute(context: AssetExecutionContext) -> MaterializeResult:
+                    return _stage_source(
                         context=context,
                         url=url,
-                        bundle_key=bundle_key,
-                        table_keys=table_keys,
-                        as_of_date=as_of_date,
-                        dataset_name=f"{dataset_name_prefix}_{as_of_date.replace('-', '_')}",
-                        pipeline_name=f"{pipeline_name_prefix}_{slug}_{as_of_date}",
+                        members=members,
+                        as_of_date=as_of_fn(),
+                        lake_root=lake_root,
                         dest_config=dest_config,
-                        default_bucket_url=f"{bucket_url_prefix}/{as_of_date}",
                     )
 
                 return _compute
 
-            assets.append(
-                multi_asset(
-                    name=f"{self.asset_name}_{slug}",
-                    specs=specs,
-                    can_subset=True,
-                )(make_compute())
+            staging_assets.append(
+                asset(
+                    key=bundle_key,
+                    group_name=self.asset_group,
+                    kinds={"file"},
+                    description=f"Downloads {filename} and stages its CSVs in the lake.",
+                    op_tags={"publog/source": slug},
+                )(make_staging())
             )
 
-        return assets
+            for member in members:
+                table = table_name_for(member)
+
+                def make_table(url=url, member=member, table=table):
+                    def _compute(context: AssetExecutionContext) -> MaterializeResult:
+                        as_of_date = as_of_fn()
+                        return _convert_table(
+                            context=context,
+                            url=url,
+                            member=member,
+                            table=table,
+                            as_of_date=as_of_date,
+                            dataset_name=(
+                                f"{dataset_name_prefix}_{as_of_date.replace('-', '_')}"
+                            ),
+                            lake_root=lake_root,
+                            dest_config=dest_config,
+                            compression=compression,
+                        )
+
+                    return _compute
+
+                table_assets.append(
+                    asset(
+                        key=AssetKey([self.key_prefix, table]),
+                        deps=[bundle_key],
+                        group_name=self.asset_group,
+                        kinds={"parquet", "duckdb"},
+                        description=f"PUB LOG table `{table}`, converted from {member}.",
+                        op_tags={"publog/source": slug},
+                    )(make_table())
+                )
+
+        return staging_assets, table_assets
 
     def build_defs(self, context: ComponentLoadContext) -> Definitions:
         dataset_name_prefix = self.dataset_name or "publog"
@@ -331,13 +375,13 @@ class PublogPipelineComponent(Component, Resolvable, Model):
             "execution": {"config": {"multiprocess": {"max_concurrent": self.max_concurrent}}}
         }
 
-        monthly_assets = self._build_source_assets(
+        monthly_staging, monthly_tables = self._build_source_assets(
             urls=list(self.monthly_urls),
             as_of_fn=lambda: datetime.now().strftime("%Y-%m-01"),
             dataset_name_prefix=dataset_name_prefix,
-            pipeline_name_prefix="publog_lake_pipeline",
-            bucket_url_prefix="file:///tmp/publog-lake",
+            default_bucket_url="file:///tmp/publog-lake",
         )
+        monthly_assets = monthly_staging + monthly_tables
 
         monthly_job = define_asset_job(
             name=f"{self.asset_name}_monthly_job",
@@ -357,13 +401,13 @@ class PublogPipelineComponent(Component, Resolvable, Model):
 
         quarterly_urls = list(self.quarterly_urls)
         if quarterly_urls:
-            quarterly_assets = self._build_source_assets(
+            quarterly_staging, quarterly_tables = self._build_source_assets(
                 urls=quarterly_urls,
                 as_of_fn=_current_quarter_start,
                 dataset_name_prefix=f"{dataset_name_prefix}_quarterly",
-                pipeline_name_prefix="publog_quarterly_pipeline",
-                bucket_url_prefix="file:///tmp/publog-lake-quarterly",
+                default_bucket_url="file:///tmp/publog-lake-quarterly",
             )
+            quarterly_assets = quarterly_staging + quarterly_tables
             quarterly_job = define_asset_job(
                 name=f"{self.asset_name}_quarterly_job",
                 selection=AssetSelection.assets(*quarterly_assets),

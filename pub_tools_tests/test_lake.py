@@ -1,0 +1,235 @@
+import io
+import json
+import pathlib
+import zipfile
+
+import duckdb
+import pytest
+
+from pub_tools.lake import (
+    clean_header,
+    csv_to_parquet,
+    duckdb_path,
+    marker_url,
+    object_exists,
+    object_mtime,
+    raw_csv_url,
+    read_marker,
+    stage_zip_to_lake,
+    storage_options,
+    table_parquet_url,
+    write_marker,
+)
+
+
+@pytest.fixture
+def lake(tmp_path):
+    return (tmp_path / "lake").as_uri()
+
+
+def _write_csv(tmp_path, name, body):
+    p = tmp_path / name
+    p.write_text(body, newline="")
+    return p
+
+
+# --- config plumbing -------------------------------------------------------
+
+
+def test_storage_options_maps_dlt_credentials():
+    opts = storage_options({
+        "credentials": {
+            "aws_access_key_id": "user",
+            "aws_secret_access_key": "pass",
+            "endpoint_url": "http://minio:9000",
+        }
+    })
+    assert opts["key"] == "user"
+    assert opts["secret"] == "pass"
+    assert opts["client_kwargs"] == {"endpoint_url": "http://minio:9000"}
+
+
+def test_storage_options_empty_when_unconfigured():
+    assert storage_options({}) == {}
+
+
+def test_duckdb_path_strips_file_scheme_but_not_s3(tmp_path):
+    assert duckdb_path("s3://bucket/a/b.csv") == "s3://bucket/a/b.csv"
+    # tmp_path, not a hardcoded POSIX path: file URIs require an absolute path,
+    # and "/tmp/..." is not absolute on Windows.
+    target = tmp_path / "x" / "y.csv"
+    local = duckdb_path(target.as_uri())
+    assert "://" not in local
+    assert pathlib.Path(local) == target
+
+
+def test_url_builders_are_stable():
+    assert raw_csv_url("s3://lake/", "2026-07-01", "cage", "sub/dir/P_CAGE.CSV") == (
+        "s3://lake/_raw/2026-07-01/cage/P_CAGE.CSV"
+    )
+    assert marker_url("s3://lake", "2026-07-01", "cage") == (
+        "s3://lake/_raw/2026-07-01/cage/_source.json"
+    )
+    assert table_parquet_url("s3://lake", "publog_2026_07_01", "p_cage") == (
+        "s3://lake/publog_2026_07_01/p_cage/data.parquet"
+    )
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("CAGE Code", "cage_code"),
+        ("NIIN No.", "niin_no_"),
+        ("Ref-No", "ref_no"),
+        ("A/B", "a_b"),
+        ("  Padded  ", "padded"),
+    ],
+)
+def test_clean_header(raw, expected):
+    assert clean_header(raw) == expected
+
+
+# --- staging ---------------------------------------------------------------
+
+
+def test_stage_zip_streams_declared_members_only(tmp_path, lake, monkeypatch):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("P_CAGE.CSV", "a,b\n1,2\n")
+        z.writestr("V_CAGE_ADDRESS.CSV", "a,b\n3,4\n")
+        z.writestr("SURPRISE.CSV", "a,b\n5,6\n")
+        z.writestr("readme.txt", "ignore")
+
+    monkeypatch.setattr(
+        "pub_tools.assets.download_url",
+        lambda session, url, dest: pathlib.Path(dest).write_bytes(buf.getvalue()),
+    )
+    warnings = []
+
+    class Log:
+        def info(self, msg, *a):
+            pass
+
+        def warning(self, msg, *a):
+            warnings.append(msg % a if a else msg)
+
+    staged = stage_zip_to_lake(
+        session=None,
+        url="https://x/PUBLOG/CAGE.zip",
+        lake_root=lake,
+        as_of_date="2026-07-01",
+        slug="cage",
+        members=["P_CAGE.CSV", "V_CAGE_ADDRESS.CSV"],
+        dest_config={},
+        log=Log(),
+    )
+
+    assert sorted(staged) == ["P_CAGE.CSV", "V_CAGE_ADDRESS.CSV"]
+    assert object_exists(raw_csv_url(lake, "2026-07-01", "cage", "P_CAGE.CSV"), {})
+    # an undeclared member has no asset to convert it, so it must be reported
+    assert any("SURPRISE.CSV" in w for w in warnings), warnings
+    assert not object_exists(raw_csv_url(lake, "2026-07-01", "cage", "SURPRISE.CSV"), {})
+
+
+def test_stage_bare_csv_source(tmp_path, lake, monkeypatch):
+    monkeypatch.setattr(
+        "pub_tools.assets.download_url",
+        lambda session, url, dest: pathlib.Path(dest).write_text("a,b\n1,2\n"),
+    )
+    staged = stage_zip_to_lake(
+        session=None,
+        url="https://x/FOIA/MRD0107.CSV",
+        lake_root=lake,
+        as_of_date="2026-07-01",
+        slug="mrd0107",
+        members=["MRD0107.CSV"],
+        dest_config={},
+    )
+    assert list(staged) == ["MRD0107.CSV"]
+
+
+# --- markers ---------------------------------------------------------------
+
+
+def test_marker_roundtrip_and_missing(lake):
+    url = marker_url(lake, "2026-07-01", "cage")
+    assert read_marker(url, {}) is None
+    write_marker(url, {"source_last_modified": "LM1", "members": ["A.CSV"]}, {})
+    assert read_marker(url, {})["source_last_modified"] == "LM1"
+
+
+def test_read_marker_tolerates_corruption(lake, tmp_path):
+    url = marker_url(lake, "2026-07-01", "cage")
+    write_marker(url, {"a": 1}, {})
+    target = pathlib.Path(duckdb_path(url))
+    target.write_text("{not json")
+    # A corrupt marker must read as "unknown" so staging redoes the work,
+    # rather than raising and wedging the asset.
+    assert read_marker(url, {}) is None
+
+
+def test_object_mtime_absent_is_none(lake):
+    assert object_mtime(lake + "/nope.csv", {}) is None
+
+
+# --- conversion ------------------------------------------------------------
+
+
+def test_csv_to_parquet_preserves_leading_zeros_and_types(tmp_path, lake):
+    """PUB LOG identifiers are zero-padded; any type inference corrupts them."""
+    csv = _write_csv(
+        tmp_path,
+        "P_CAGE.CSV",
+        'CAGE Code,NIIN No.,Company-Name\n01234,0001,"ACME, INC."\n0000A,0002,"Q ""X"""\n',
+    )
+    out = table_parquet_url(lake, "publog_2026_07_01", "p_cage")
+    con = duckdb.connect()
+    rows = csv_to_parquet(con, csv.as_uri(), out)
+    assert rows == 2
+
+    described = con.execute(
+        "DESCRIBE SELECT * FROM read_parquet(?)", [duckdb_path(out)]
+    ).fetchall()
+    assert [d[0] for d in described] == ["cage_code", "niin_no_", "company_name"]
+    assert {d[1] for d in described} == {"VARCHAR"}
+
+    values = con.execute(
+        "SELECT * FROM read_parquet(?) ORDER BY niin_no_", [duckdb_path(out)]
+    ).fetchall()
+    assert values == [
+        ("01234", "0001", "ACME, INC."),
+        ("0000A", "0002", 'Q "X"'),
+    ]
+
+
+def test_csv_to_parquet_pads_short_rows_with_empty_string(tmp_path, lake):
+    """The previous loader padded missing trailing fields with "", not NULL.
+    Downstream consumers depend on that, so parity is asserted explicitly."""
+    csv = _write_csv(tmp_path, "T.CSV", "a,b,c\n1,2\n")
+    out = table_parquet_url(lake, "ds", "t")
+    con = duckdb.connect()
+    assert csv_to_parquet(con, csv.as_uri(), out) == 1
+    assert con.execute(
+        "SELECT * FROM read_parquet(?)", [duckdb_path(out)]
+    ).fetchall() == [("1", "2", "")]
+
+
+def test_csv_to_parquet_deduplicates_colliding_column_names(tmp_path, lake):
+    """"A.B" and "A-B" both clean to "a_b"; Parquet cannot hold two columns of
+    the same name, so the second must be suffixed rather than silently lost."""
+    csv = _write_csv(tmp_path, "T.CSV", "A.B,A-B\n1,2\n")
+    out = table_parquet_url(lake, "ds", "t")
+    con = duckdb.connect()
+    csv_to_parquet(con, csv.as_uri(), out)
+    described = con.execute(
+        "DESCRIBE SELECT * FROM read_parquet(?)", [duckdb_path(out)]
+    ).fetchall()
+    assert [d[0] for d in described] == ["a_b", "a_b_2"]
+
+
+def test_csv_to_parquet_row_count_matches_input(tmp_path, lake):
+    body = "a\n" + "".join("%d\n" % i for i in range(5000))
+    csv = _write_csv(tmp_path, "BIG.CSV", body)
+    out = table_parquet_url(lake, "ds", "big")
+    con = duckdb.connect()
+    assert csv_to_parquet(con, csv.as_uri(), out) == 5000

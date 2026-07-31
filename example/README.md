@@ -37,19 +37,33 @@ It sets up:
 
 1. Open the Dagster UI at [http://localhost:3000](http://localhost:3000).
 2. Navigate to the **Assets** tab.
-3. Select the `publog_ingestion` asset group. It contains two kinds of asset:
-   - `publog/source/<name>` — one per PUB LOG source archive (`publog/source/cage`,
-     `publog/source/history`, ...), the unit of download and execution.
-   - `publog/<table>` — one per CSV inside those archives (`publog/v_cage_address`,
-     `publog/v_flis_identification`, ...), each depending on its source archive.
-     These are what downstream assets should depend on.
-4. Materialize the whole group for a full snapshot, or a single source archive to
-   ingest just that file.
-5. Each source archive downloads, extracts, and loads in its own step, so they run
-   in parallel subprocesses (3 at a time by default; see `max_concurrent`), retry
-   independently, and log per-file read progress and row counts as they go. The
-   resulting Parquet lands in the MinIO bucket at
-   `<dataset>/<table>/*.parquet`.
+3. Select the `publog_ingestion` asset group. Ingest runs in two stages:
+   - `publog/source/<name>` — one per PUB LOG source archive
+     (`publog/source/cage`, ...). Downloads the archive and streams each CSV
+     member into MinIO under `_raw/<as-of-date>/<name>/`, without ever
+     expanding it onto local disk.
+   - `publog/<table>` — one per CSV (`publog/v_cage_address`, ...). Reads its
+     one staged CSV and converts it to Parquet with DuckDB, writing
+     `<dataset>/<table>/data.parquet`. These are what downstream assets
+     should depend on.
+4. Materialize the whole group for a full snapshot, or any single asset.
+5. Every table converts as its own step, so conversions run in parallel (6 at a
+   time by default; see `max_concurrent`) and retry individually — a failed
+   table re-converts without re-downloading its archive.
+
+Both stages are incremental, and both decide from the lake rather than from
+Dagster's run history:
+
+- Staging skips when the source's `Last-Modified` is unchanged *and* every
+  declared CSV is still present in the bucket.
+- A conversion skips when its Parquet is already newer than its staged CSV.
+
+So deleting an object from MinIO causes exactly that object to be rebuilt on
+the next run.
+
+Every column is written as text. PUB LOG identifiers (NSN, NIIN, FSC, CAGE
+codes) are zero-padded, and type inference would silently turn `01234` into
+`1234`.
 
 To depend on a PUB LOG table from your own asset:
 

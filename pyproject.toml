@@ -10,9 +10,20 @@ dependencies = [
     "dagster-postgres",
     "dlt[parquet,s3]>=1.22.2",
     "requests>=2.32.5",
-    # publog_csv_resource uses pandas for CSV ingest. Declared explicitly
-    # rather than relying on dlt's transitive deps because the arm64
-    # wheel resolution can miss it under uv on aarch64 GitHub runners.
+    # PUB LOG CSV -> Parquet conversion. DuckDB's httpfs extension reads and
+    # writes s3:// directly, so a multi-GiB CSV converts without landing on
+    # the pod's disk. NOTE: httpfs is normally downloaded from duckdb.org on
+    # first use; pre-install it at image build time if the cluster restricts
+    # egress, or pub_tools.lake.duckdb_connection will fail with guidance.
+    "duckdb>=1.1",
+    # Staging streams zip members straight into object storage. s3fs also
+    # arrives via dlt[s3], but this path no longer goes through dlt, so
+    # declare it rather than depend on someone else's extra.
+    "s3fs",
+    # PUB LOG ingest no longer uses pandas directly (DuckDB does the CSV ->
+    # Parquet conversion), but it stays declared explicitly: dlt and dagster
+    # pull it transitively, and arm64 wheel resolution can miss it under uv on
+    # aarch64 GitHub runners when it is only an indirect dependency.
     "pandas",
     # dagster-aws was pulled in when the mesh_demo component lived
     # here (it referenced dag_tools.io_managers.cortex_io_manager and
