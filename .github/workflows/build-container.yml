@@ -70,6 +70,22 @@ jobs:
           RUN --mount=type=cache,target=/root/.cache/uv \
               uv pip install --python /app/venv -r /app/requirements.txt
 
+          # PUB LOG ingest converts CSV -> Parquet with DuckDB reading and
+          # writing s3:// directly, which needs DuckDB's httpfs extension.
+          # DuckDB would fetch it from duckdb.org on first use -- at
+          # materialization time, inside a cluster that restricts egress. Bake
+          # it in instead, per architecture (this RUN executes under emulation
+          # for each --platform), and into a fixed world-readable directory:
+          # DuckDB's default is $HOME/.duckdb, and $HOME differs between the
+          # build (root) and the runtime uid, so a home-relative install would
+          # not be found again. The script verifies the extension loads with
+          # auto-install disabled, so the build fails here rather than
+          # producing an image that still needs the network.
+          ENV DUCKDB_EXTENSION_DIRECTORY=/opt/duckdb/extensions
+          COPY scripts/bake_duckdb_extensions.py /app/scripts/
+          RUN /app/venv/bin/python /app/scripts/bake_duckdb_extensions.py \
+              && chmod -R a+rX /opt/duckdb
+
           # Copy the application code
           COPY . /app
 

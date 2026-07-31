@@ -58,29 +58,52 @@ def storage_options(dest_config: Dict[str, Any]) -> Dict[str, Any]:
 def duckdb_connection(dest_config: Dict[str, Any]):
     """A DuckDB connection able to read and write the lake's object storage.
 
-    httpfs is what lets DuckDB address `s3://` directly, so a 2 GiB CSV
-    converts without ever landing on the pod's disk. It is normally fetched
-    from duckdb.org on first use, which fails in a network-restricted cluster
-    -- so load a already-installed copy first and only then try to install.
+    httpfs is what lets DuckDB address `s3://` directly, so a multi-GiB CSV
+    converts without ever landing on the pod's disk.
+
+    In the container image the extension is baked in at build time (see
+    scripts/bake_duckdb_extensions.py) and DUCKDB_EXTENSION_DIRECTORY points at
+    it. When that variable is set the image is meant to be self-contained, so a
+    failure to load is raised immediately rather than silently reaching for
+    duckdb.org -- which in a restricted cluster means a long hang followed by a
+    confusing error, once per asset. Outside the image the variable is unset
+    and a download is a reasonable convenience.
     """
     import duckdb
 
     con = duckdb.connect()
-    try:
-        con.execute("LOAD httpfs")
-    except Exception:
+    directory = os.environ.get("DUCKDB_EXTENSION_DIRECTORY")
+    if directory:
+        con.execute("SET extension_directory=?", [directory])
+        con.execute("SET autoinstall_known_extensions=false")
         try:
-            con.execute("INSTALL httpfs")
             con.execute("LOAD httpfs")
         except Exception as e:
             raise RuntimeError(
-                "DuckDB could not load the httpfs extension, which is required "
-                "to read and write s3:// paths. In a network-restricted "
-                "environment, bake it into the image at build time "
-                "(`python -c \"import duckdb; duckdb.connect().execute('INSTALL "
-                "httpfs')\"`) so it is present in the extension directory. "
+                f"DuckDB {duckdb.__version__} could not load the httpfs "
+                f"extension from {directory}, which is required to read and "
+                f"write s3:// paths. The image is supposed to ship it -- "
+                f"rebuild so scripts/bake_duckdb_extensions.py runs against "
+                f"this DuckDB version, since extensions are version- and "
+                f"architecture-specific and an upgraded duckdb will not find "
+                f"an extension baked for the previous one. "
                 f"Underlying error: {e}"
             ) from e
+    else:
+        try:
+            con.execute("LOAD httpfs")
+        except Exception:
+            try:
+                con.execute("INSTALL httpfs")
+                con.execute("LOAD httpfs")
+            except Exception as e:
+                raise RuntimeError(
+                    "DuckDB could not load or install the httpfs extension, "
+                    "which is required to read and write s3:// paths. Set "
+                    "DUCKDB_EXTENSION_DIRECTORY and run "
+                    "scripts/bake_duckdb_extensions.py to provide it offline. "
+                    f"Underlying error: {e}"
+                ) from e
 
     creds = dest_config.get("credentials") or {}
     endpoint, use_ssl = _split_endpoint(creds.get("endpoint_url"))

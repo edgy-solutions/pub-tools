@@ -9,6 +9,7 @@ import pytest
 from pub_tools.lake import (
     clean_header,
     csv_to_parquet,
+    duckdb_connection,
     duckdb_path,
     marker_url,
     object_exists,
@@ -51,6 +52,47 @@ def test_storage_options_maps_dlt_credentials():
 
 def test_storage_options_empty_when_unconfigured():
     assert storage_options({}) == {}
+
+
+def test_duckdb_connection_fails_fast_when_baked_extension_missing(tmp_path, monkeypatch):
+    """The container image ships httpfs (scripts/bake_duckdb_extensions.py).
+    When DUCKDB_EXTENSION_DIRECTORY says so but the extension is not there,
+    the connection must fail immediately with an actionable message rather
+    than quietly downloading from duckdb.org -- in a restricted cluster that
+    is a long hang and a confusing error, repeated for every table."""
+    monkeypatch.setenv("DUCKDB_EXTENSION_DIRECTORY", str(tmp_path / "empty"))
+    with pytest.raises(RuntimeError) as excinfo:
+        duckdb_connection({})
+    message = str(excinfo.value)
+    assert "bake_duckdb_extensions" in message
+    assert "architecture-specific" in message
+
+
+def test_duckdb_connection_uses_baked_extension_directory(tmp_path, monkeypatch):
+    """Bake into a scratch directory the same way the image build does, then
+    prove a connection loads httpfs from it with auto-install disabled."""
+    import duckdb
+
+    directory = tmp_path / "ext"
+    directory.mkdir()
+    seed = duckdb.connect()
+    seed.execute("SET extension_directory=?", [str(directory)])
+    try:
+        seed.execute("INSTALL httpfs")
+    except Exception:
+        pytest.skip("no network to fetch httpfs for the offline-load check")
+    finally:
+        seed.close()
+
+    monkeypatch.setenv("DUCKDB_EXTENSION_DIRECTORY", str(directory))
+    con = duckdb_connection({})
+    try:
+        loaded = con.execute(
+            "SELECT loaded FROM duckdb_extensions() WHERE extension_name='httpfs'"
+        ).fetchall()
+        assert loaded and loaded[0][0] is True
+    finally:
+        con.close()
 
 
 def test_duckdb_path_strips_file_scheme_but_not_s3(tmp_path):
