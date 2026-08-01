@@ -1,0 +1,28 @@
+# Global DataHub catalog registration.
+#
+# Emits exactly one definition: an ASSET_MATERIALIZATION sensor that
+# registers every materialized asset (plus the job / run entities and
+# lineage) with DataHub. This is the ONLY catalog path — IO managers do
+# not emit to DataHub themselves, because an IO manager is bound
+# per-asset and may be bound to assets another deployment owns, whereas
+# a materialization event unambiguously means "this deployment produced
+# this".
+#
+# Requires ``acryl-datahub-dagster-plugin`` (declared in pyproject) —
+# the sensor is built from its ``make_datahub_sensor``.
+#
+# The auth token is read from the ``DATAHUB_TOKEN`` environment variable
+# rather than being templated in here, so the PAT never lands in a
+# rendered ConfigMap. It is required when the metadata service runs with
+# METADATA_SERVICE_AUTH_ENABLED=true.
+type: dag_tools.components.datahub_lineage.DatahubLineageComponent
+
+attributes:
+  datahub_config:
+    # GMS base URL — NOT the GraphQL endpoint (that is a different layer).
+    server: "{{ env('DATAHUB_SERVER', 'http://datahub-datahub-gms:8080') }}"
+
+  # make_datahub_sensor defaults to STOPPED, which presents as a broken
+  # integration: the sensor exists but silently never fires. Default it on;
+  # set DATAHUB_SENSOR_STATUS=STOPPED to disable without redeploying.
+  default_status: "{{ env('DATAHUB_SENSOR_STATUS', 'RUNNING') }}"

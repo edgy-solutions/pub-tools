@@ -35,10 +35,25 @@ dependencies = [
     # may rely on it transitively. Remove after a clean broker-pod
     # boot has been verified without it.
     "dagster-aws",
-    # DataHub publishing — CortexPolarsIOManager.handle_output emits
-    # the materialized URN directly via DataHubGraph (no sensor / no
-    # version-skewed plugin). Only acryl-datahub itself is needed.
+    # DataHub catalog registration.
+    #
+    # NOTE: this comment used to read "only acryl-datahub is needed,
+    # because CortexPolarsIOManager.handle_output emits the URN directly
+    # (no sensor / no version-skewed plugin)". That inline emit has been
+    # removed — IO managers no longer publish to DataHub, because an IO
+    # manager is bound per-asset and may be bound to assets another
+    # deployment owns, so it cannot honestly claim authorship. Catalog
+    # registration now happens at the materialization-event level, via
+    # the global sensor built by
+    # dag_tools.components.datahub_lineage.DatahubLineageComponent
+    # (wired in pub_tools/components/datahub_lineage/component.yaml).
+    #
+    # That sensor is constructed from the plugin's make_datahub_sensor,
+    # so the plugin — not just acryl-datahub — is now required. Without
+    # it the component's imports fall into their ImportError branch and
+    # building the sensor fails.
     "acryl-datahub",
+    "acryl-datahub-dagster-plugin",
     # Provides dag_tools.domain_broker (the FastAPI broker that the
     # iagent chart deploys as a second pod against this same image,
     # with a different startup command). The [broker] extras group
