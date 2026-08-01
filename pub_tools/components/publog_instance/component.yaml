@@ -9,6 +9,13 @@ attributes:
   quarterly_cron_schedule: "{{ env('PUBLOG_QUARTERLY_CRON', '0 14 2 1,4,7,10 *') }}"
   schedule_timezone: "{{ env('PUBLOG_SCHEDULE_TZ', 'UTC') }}"
 
+  # Concurrent steps per run. Each is a subprocess with its own DuckDB
+  # budget, so this is bounded by the POD's memory limit — raising it
+  # without raising that limit gets the pod OOMKilled mid-run, and the
+  # run is then left STARTED forever because the run worker dies with it.
+  # See the sizing note beside DUCKDB_MEMORY_LIMIT in the chart values.
+  max_concurrent: "{{ env('PUBLOG_MAX_CONCURRENT', '4') }}"
+
   dest_config:
     drivername: filesystem
     destination:

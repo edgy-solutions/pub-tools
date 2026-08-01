@@ -308,11 +308,20 @@ class PublogPipelineComponent(Component, Resolvable, Model):
     directory of `data_N.parquet` parts, so a large table splits instead of
     producing one unwieldy object. Set to null for a single file."""
 
-    max_concurrent: int = 6
-    """Steps run in parallel per job. Staging holds one compressed archive on
-    the run worker's disk; conversions stream object storage and hold neither
-    input nor output locally, so this is bounded by memory and network rather
-    than disk."""
+    max_concurrent: int = 4
+    """Steps run in parallel per job.
+
+    Bounded by MEMORY, not disk: staging holds one compressed archive on
+    the run worker's disk and conversions stream object storage, but every
+    concurrent step is a subprocess carrying its own DuckDB budget.
+    Measured, each costs ~256 MB of DuckDB (see DUCKDB_MEMORY_LIMIT) plus
+    ~250 MB of Python/Dagster, on top of ~300 MB for the parent — so four
+    steps is ~2.3 GB and the pod limit has to cover it.
+
+    Raising this without raising the pod's memory limit gets the pod
+    OOMKilled mid-run, and because Dagster's run worker dies with it the
+    run is left STARTED forever with no failure event. Default lowered
+    from 6 after exactly that happened at a 1 Gi limit."""
 
     monthly_cron_schedule: str = "0 14 2 * *"
     """Cron for monthly ingest. Default: 14:00 UTC on day 2 of each month
