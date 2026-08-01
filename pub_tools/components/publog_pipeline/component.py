@@ -1,6 +1,10 @@
+import os
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+
+from dag_tools.io_managers.duckdb import ConfigurableDuckDBIOManager
+from dag_tools.resources.duckdb import DuckDBResource
 
 from dagster import (
     AssetExecutionContext,
@@ -26,7 +30,8 @@ from pub_tools.assets import (
     table_name_for,
 )
 from pub_tools.lake import (
-    csv_to_parquet,
+    csv_relation,
+    dataset_mtime,
     duckdb_connection,
     marker_url,
     object_exists,
@@ -162,16 +167,21 @@ def _convert_table(
     member: str,
     table: str,
     as_of_date: str,
-    dataset_name: str,
+    key_prefix: str,
     lake_root: str,
     dest_config: Dict[str, Any],
-    compression: str,
-) -> MaterializeResult:
-    """Convert one staged CSV into one Parquet table."""
+):
+    """Hand the staged CSV to the DuckDB IO manager as a lazy relation.
+
+    Returns either a relation (write it) or a MaterializeResult (skip):
+    Dagster only calls `handle_output` for the former, so returning a
+    MaterializeResult is how a step declines to produce output while still
+    recording why.
+    """
     slug = source_slug(url)
     options = storage_options(dest_config)
     csv_url = raw_csv_url(lake_root, as_of_date, slug, member)
-    parquet_url = table_parquet_url(lake_root, dataset_name, table)
+    parquet_url = table_parquet_url(lake_root, table, key_prefix=key_prefix)
 
     csv_mtime = object_mtime(csv_url, options)
     if csv_mtime is None:
@@ -184,7 +194,10 @@ def _convert_table(
     # Rebuild only when the input is newer than the output. Both timestamps come
     # from the same store, so they are comparable, and a deleted or truncated
     # Parquet simply rebuilds rather than being reported as fresh.
-    parquet_mtime = object_mtime(parquet_url, options)
+    # dataset_mtime, not object_mtime: the output is a directory of part
+    # files, and on S3 a directory is only a key prefix with no
+    # LastModified -- statting it would report None and rebuild every run.
+    parquet_mtime = dataset_mtime(parquet_url, options)
     if parquet_mtime is not None and parquet_mtime >= csv_mtime:
         context.log.info(
             "%s is already newer than its staged CSV; skipping conversion.", table
@@ -199,24 +212,21 @@ def _convert_table(
             }
         )
 
+    # connect(), not get_connection(): the relation is lazy and is executed
+    # by the IO manager after this function returns, so the connection has
+    # to still be open then. Dagster tears the run down afterwards, which is
+    # what ultimately releases it.
     con = duckdb_connection(dest_config)
-    try:
-        rows = csv_to_parquet(
-            con, csv_url, parquet_url, compression=compression, log=context.log
-        )
-    finally:
-        con.close()
-
-    return MaterializeResult(
-        metadata={
-            "dagster/row_count": rows,
+    context.log.info("Converting %s -> %s", csv_url, parquet_url)
+    context.add_output_metadata(
+        {
             "as_of_date": as_of_date,
             "table": table,
-            "table_path": parquet_url,
             "source_csv": csv_url,
             "source_url": url,
         }
     )
+    return csv_relation(con, csv_url)
 
 
 class PublogPipelineComponent(Component, Resolvable, Model):
@@ -228,6 +238,20 @@ class PublogPipelineComponent(Component, Resolvable, Model):
         each CSV member into the lake under `_raw/<as_of>/<slug>/`.
       * `<key_prefix>/<table>` -- converts one staged CSV into one Parquet
         table with DuckDB, e.g. `publog/v_cage_address`.
+
+    Table assets hand the conversion to the DuckDB IO manager as a lazy
+    relation rather than writing it themselves, so the lake layout is owned
+    in one place and the tables are advertised to the mesh (the domain
+    broker reads `physical_coordinates` off the registered IO manager).
+    Each table lands as a directory of Parquet parts at
+    `<lake_root>/<key_prefix>/<table>.parquet/`.
+
+    NOTE: that path is NOT date-versioned, where the previous layout wrote
+    `<lake_root>/publog_<as_of>/<table>/data.parquet`. A monthly run now
+    replaces the table in place. Dated history is still in the lake as the
+    staged CSVs under `_raw/<as_of>/`, so a past month can be rebuilt, but
+    Parquet snapshots per month are gone. Making them first-class again
+    means partitioning these assets, which is the right way to model it.
 
     Every table is its own step, so conversions run in parallel, retry
     individually, and can be materialized on their own without re-downloading
@@ -254,9 +278,6 @@ class PublogPipelineComponent(Component, Resolvable, Model):
     dest_config: Dict[str, Any]
     """Destination credentials and bucket configuration (dlt filesystem-style)."""
 
-    dataset_name: Optional[str] = None
-    """Prefix for lake dataset names; defaulted to 'publog'."""
-
     key_prefix: str = "publog"
     """Leading component of every generated asset key."""
 
@@ -267,6 +288,18 @@ class PublogPipelineComponent(Component, Resolvable, Model):
 
     parquet_compression: str = "zstd"
     """DuckDB Parquet codec: zstd, snappy, gzip, or uncompressed."""
+
+    io_manager_key: str = "publog_duckdb_io_manager"
+    """Resource key of the DuckDB IO manager the table assets write through.
+
+    The component registers one under this key. Overriding it points the
+    tables at an IO manager defined elsewhere -- which is how the table
+    layout would be changed without touching this component."""
+
+    part_file_size: Optional[str] = "128MB"
+    """Target size per Parquet part file. Any value makes the output a
+    directory of `data_N.parquet` parts, so a large table splits instead of
+    producing one unwieldy object. Set to null for a single file."""
 
     max_concurrent: int = 6
     """Steps run in parallel per job. Staging holds one compressed archive on
@@ -287,8 +320,8 @@ class PublogPipelineComponent(Component, Resolvable, Model):
         self,
         urls: List[str],
         as_of_fn,
-        dataset_name_prefix: str,
         default_bucket_url: str,
+        io_manager_key: str,
     ):
         """Build the staging asset and per-table conversion assets for each URL.
 
@@ -298,7 +331,6 @@ class PublogPipelineComponent(Component, Resolvable, Model):
         derived name must come from the one call so they cannot disagree.
         """
         dest_config = self.dest_config
-        compression = self.parquet_compression
         lake_root = _lake_root(dest_config, default_bucket_url)
         staging_assets, table_assets = [], []
 
@@ -338,20 +370,16 @@ class PublogPipelineComponent(Component, Resolvable, Model):
                 table = table_name_for(member)
 
                 def make_table(url=url, member=member, table=table):
-                    def _compute(context: AssetExecutionContext) -> MaterializeResult:
-                        as_of_date = as_of_fn()
+                    def _compute(context: AssetExecutionContext):
                         return _convert_table(
                             context=context,
                             url=url,
                             member=member,
                             table=table,
-                            as_of_date=as_of_date,
-                            dataset_name=(
-                                f"{dataset_name_prefix}_{as_of_date.replace('-', '_')}"
-                            ),
+                            as_of_date=as_of_fn(),
+                            key_prefix=self.key_prefix,
                             lake_root=lake_root,
                             dest_config=dest_config,
-                            compression=compression,
                         )
 
                     return _compute
@@ -362,6 +390,7 @@ class PublogPipelineComponent(Component, Resolvable, Model):
                         deps=[bundle_key],
                         group_name=self.asset_group,
                         kinds={"parquet", "duckdb"},
+                        io_manager_key=io_manager_key,
                         description=f"PUB LOG table `{table}`, converted from {member}.",
                         op_tags={"publog/source": slug},
                     )(make_table())
@@ -370,16 +399,31 @@ class PublogPipelineComponent(Component, Resolvable, Model):
         return staging_assets, table_assets
 
     def build_defs(self, context: ComponentLoadContext) -> Definitions:
-        dataset_name_prefix = self.dataset_name or "publog"
         exec_config = {
             "execution": {"config": {"multiprocess": {"max_concurrent": self.max_concurrent}}}
         }
 
+        # One IO manager per distinct lake root. Monthly and quarterly share
+        # a root whenever dest_config sets bucket_url (the deployed case) and
+        # only diverge on the built-in dev defaults, so this is usually one
+        # resource -- but sharing a key across two roots would silently write
+        # quarterly tables into the monthly lake.
+        io_managers: Dict[str, Any] = {}
+
+        def io_manager_for(default_bucket_url: str, suffix: str = "") -> str:
+            root = _lake_root(self.dest_config, default_bucket_url)
+            for key, manager in io_managers.items():
+                if manager.uri_base == root:
+                    return key
+            key = f"{self.io_manager_key}{suffix}"
+            io_managers[key] = self._io_manager(root)
+            return key
+
         monthly_staging, monthly_tables = self._build_source_assets(
             urls=list(self.monthly_urls),
             as_of_fn=lambda: datetime.now().strftime("%Y-%m-01"),
-            dataset_name_prefix=dataset_name_prefix,
             default_bucket_url="file:///tmp/publog-lake",
+            io_manager_key=io_manager_for("file:///tmp/publog-lake"),
         )
         monthly_assets = monthly_staging + monthly_tables
 
@@ -404,8 +448,10 @@ class PublogPipelineComponent(Component, Resolvable, Model):
             quarterly_staging, quarterly_tables = self._build_source_assets(
                 urls=quarterly_urls,
                 as_of_fn=_current_quarter_start,
-                dataset_name_prefix=f"{dataset_name_prefix}_quarterly",
                 default_bucket_url="file:///tmp/publog-lake-quarterly",
+                io_manager_key=io_manager_for(
+                    "file:///tmp/publog-lake-quarterly", "_quarterly"
+                ),
             )
             quarterly_assets = quarterly_staging + quarterly_tables
             quarterly_job = define_asset_job(
@@ -424,4 +470,29 @@ class PublogPipelineComponent(Component, Resolvable, Model):
                 )
             )
 
-        return Definitions(assets=assets, jobs=jobs, schedules=schedules)
+        return Definitions(
+            assets=assets, jobs=jobs, schedules=schedules, resources=io_managers
+        )
+
+    def _io_manager(self, lake_root: str) -> ConfigurableDuckDBIOManager:
+        """The DuckDB IO manager the table assets write through.
+
+        Registering it here rather than expecting one from the enclosing
+        Definitions keeps the component self-contained -- and it is what the
+        domain broker reads to advertise these tables to the mesh, since the
+        broker inspects the IO manager objects in `Definitions(resources=)`
+        for a `physical_coordinates` method.
+        """
+        creds = (self.dest_config.get("credentials") or {})
+        return ConfigurableDuckDBIOManager(
+            duckdb=DuckDBResource(
+                aws_access_key_id=creds.get("aws_access_key_id"),
+                aws_secret_access_key=creds.get("aws_secret_access_key"),
+                aws_region=creds.get("region_name") or "us-east-1",
+                endpoint_url=creds.get("endpoint_url"),
+                memory_limit=os.environ.get("DUCKDB_MEMORY_LIMIT"),
+            ),
+            uri_base=lake_root,
+            compression=self.parquet_compression,
+            file_size_bytes=self.part_file_size,
+        )

@@ -160,8 +160,22 @@ def test_url_builders_are_stable():
     assert marker_url("s3://lake", "2026-07-01", "cage") == (
         "s3://lake/_raw/2026-07-01/cage/_source.json"
     )
-    assert table_parquet_url("s3://lake", "publog_2026_07_01", "p_cage") == (
-        "s3://lake/publog_2026_07_01/p_cage/data.parquet"
+    # The DuckDB IO manager owns the table layout now, so this must agree
+    # with where the manager actually writes -- a freshness check against a
+    # path the writer does not use silently rebuilds forever or never.
+    assert table_parquet_url("s3://lake", "p_cage") == "s3://lake/publog/p_cage.parquet"
+    assert table_parquet_url("s3://lake", "p_cage", key_prefix="other") == (
+        "s3://lake/other/p_cage.parquet"
+    )
+
+
+def test_table_parquet_url_tracks_the_io_manager():
+    """Pinned against the IO manager's own path function rather than a
+    literal, so the two cannot drift apart."""
+    from dag_tools.io_managers.duckdb import asset_uri
+
+    assert table_parquet_url("s3://lake", "p_cage") == asset_uri(
+        "s3://lake", ["publog", "p_cage"], directory=False
     )
 
 

@@ -111,8 +111,21 @@ def marker_url(lake_root: str, as_of_date: str, slug: str) -> str:
     return f"{raw_prefix(lake_root, as_of_date, slug)}/_source.json"
 
 
-def table_parquet_url(lake_root: str, dataset: str, table: str) -> str:
-    return f"{lake_root.rstrip('/')}/{dataset}/{table}/data.parquet"
+def table_parquet_url(lake_root: str, table: str, key_prefix: str = "publog") -> str:
+    """Where a converted table lands.
+
+    The DuckDB IO manager owns this location now, so the layout comes from
+    `dag_tools.io_managers.duckdb.asset_uri` rather than being spelled out
+    here -- a second copy would drift from the writer, and a freshness check
+    against the wrong path silently either rebuilds forever or never
+    rebuilds.
+
+    Returned without the trailing slash: this is used to *stat* the output,
+    not to hand to a parquet reader.
+    """
+    from dag_tools.io_managers.duckdb import asset_uri
+
+    return asset_uri(lake_root, [key_prefix, table], directory=False)
 
 
 # Freshness is decided from the lake, never from Dagster's event log.
@@ -144,9 +157,12 @@ def object_mtime(url: str, options: Dict[str, Any]) -> Optional[float]:
     """
     fs, path = _fs_and_path(url, options)
     try:
-        info = fs.info(path)
+        return _mtime_from_info(fs.info(path))
     except Exception:
         return None
+
+
+def _mtime_from_info(info: Dict[str, Any]) -> Optional[float]:
     for field in ("mtime", "LastModified", "last_modified", "created"):
         value = info.get(field)
         if value is None:
@@ -156,6 +172,44 @@ def object_mtime(url: str, options: Dict[str, Any]) -> Optional[float]:
         if isinstance(value, (int, float)):
             return float(value)
     return None
+
+
+def dataset_mtime(url: str, options: Dict[str, Any]) -> Optional[float]:
+    """Newest part file under a dataset directory, or None if it has none.
+
+    The IO manager writes a directory of `data_N.parquet` parts, and on S3 a
+    directory is only a key prefix -- `info()` on it reports no
+    LastModified, so `object_mtime` returns None and the table would rebuild
+    on every run. Statting the parts is what actually answers "when was this
+    table last written".
+
+    Newest rather than oldest: a rebuild replaces every part, so the newest
+    is when the table was last produced. An interrupted write leaves a
+    partial directory whose newest part is still older than a subsequently
+    re-staged CSV, so it rebuilds -- which is the safe direction.
+    """
+    fs, path = _fs_and_path(url.rstrip("/"), options)
+    try:
+        if not fs.exists(path):
+            return None
+        # A single file is still a valid shape (file_size_bytes disabled).
+        if fs.isfile(path):
+            return _mtime_from_info(fs.info(path))
+        entries = fs.find(path)
+    except Exception:
+        return None
+
+    times = []
+    for entry in entries:
+        if not str(entry).endswith(".parquet"):
+            continue
+        try:
+            value = _mtime_from_info(fs.info(entry))
+        except Exception:
+            continue
+        if value is not None:
+            times.append(value)
+    return max(times) if times else None
 
 
 def read_marker(url: str, options: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -315,6 +369,23 @@ def _projection(con, csv_path: str) -> str:
             f"COALESCE({_quote(raw)}, '') AS {_quote(name)}"
         )
     return ", ".join(projected)
+
+
+def csv_relation(con, csv_url: str):
+    """The staged CSV as a lazy DuckDB relation, headers cleaned.
+
+    Nothing is read yet -- the relation is a query. The DuckDB IO manager
+    executes it during `handle_output`, streaming CSV straight to Parquet in
+    vectorised C++ without the rows passing through Python.
+
+    The connection must outlive the asset that builds this, since the query
+    only runs later; see `DuckDBResource.connect` versus `get_connection`.
+    """
+    csv_path = duckdb_path(csv_url)
+    return con.sql(
+        f"SELECT {_projection(con, csv_path)} FROM "
+        f"read_csv('{csv_path}', {DUCKDB_READ_CSV_OPTIONS})"
+    )
 
 
 def csv_to_parquet(

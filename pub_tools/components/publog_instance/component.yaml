@@ -1,8 +1,10 @@
 type: pub_tools.components.publog_pipeline.PublogPipelineComponent
 
 attributes:
-  dataset_name: "{{ env('DATASET_NAME', 'publog') }}"
-
+  # The lake path now comes from the asset key, which the DuckDB IO manager
+  # owns, so `key_prefix` (default "publog") is what names the directory.
+  # `dataset_name` is gone -- it used to build a date-versioned dataset
+  # directory that nothing read.
   monthly_cron_schedule: "{{ env('PUBLOG_MONTHLY_CRON', '0 14 2 * *') }}"
   quarterly_cron_schedule: "{{ env('PUBLOG_QUARTERLY_CRON', '0 14 2 1,4,7,10 *') }}"
   schedule_timezone: "{{ env('PUBLOG_SCHEDULE_TZ', 'UTC') }}"
