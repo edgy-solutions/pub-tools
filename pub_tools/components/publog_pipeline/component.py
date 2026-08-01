@@ -3,7 +3,7 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from dag_tools.io_managers.duckdb import ConfigurableDuckDBIOManager
+from dag_tools.io_managers.duckdb import SOURCE_TYPE, ConfigurableDuckDBIOManager
 from dag_tools.resources.duckdb import DuckDBResource
 
 from dagster import (
@@ -209,6 +209,13 @@ def _convert_table(
                 "table": table,
                 "table_path": parquet_url,
                 "source_csv": csv_url,
+                # A skip still emits a materialization, and the catalog
+                # sensor reads the platform off it. Without this the IO
+                # manager never runs, nothing declares a platform, and the
+                # table re-registers under DataHub's "unknown" platform --
+                # a SEPARATE dataset from the one the write produced, so a
+                # skipped run would quietly fork the catalog entry.
+                "destination_name": SOURCE_TYPE,
             }
         )
 

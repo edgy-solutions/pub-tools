@@ -1420,7 +1420,7 @@ wheels = [
 [[package]]
 name = "edgy-dag-tools"
 version = "0.1.1"
-source = { git = "https://github.com/edgy-solutions/dag-tools.git?rev=master#1713dd16d9b9f80a695df458cd50d7dcf9c53d0a" }
+source = { git = "https://github.com/edgy-solutions/dag-tools.git?rev=master#6b79f75d217f52178ef184a70079c4869bb633f7" }
 dependencies = [
     { name = "clickhouse-connect" },
     { name = "connectorx" },
