@@ -81,6 +81,13 @@ dev = [
 requires = ["hatchling>=1.19.0"]
 build-backend = "hatchling.build"
 
+# edgy-dag-tools is declared as a git URL (see the dependency comment above),
+# which hatchling classes as a "direct reference" and refuses to build
+# without this opt-in -- `uv sync` fails at metadata generation with
+# "Dependency #12 ... cannot be a direct reference".
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.dagster]
 module_name = "pub_tools.definitions"
 code_location_name = "pub_tools"

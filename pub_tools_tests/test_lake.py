@@ -95,6 +95,54 @@ def test_duckdb_connection_uses_baked_extension_directory(tmp_path, monkeypatch)
         con.close()
 
 
+def _setting(con, name):
+    return con.execute(f"SELECT current_setting('{name}')").fetchone()[0]
+
+
+def test_duckdb_connection_applies_dlt_credentials():
+    """dlt names the region `region_name`; DuckDB wants a bare host:port in
+    s3_endpoint plus a separate use_ssl flag, and path-style URLs because
+    MinIO does not serve virtual-host buckets."""
+    con = duckdb_connection({
+        "credentials": {
+            "aws_access_key_id": "user",
+            "aws_secret_access_key": "pass",
+            "endpoint_url": "http://minio:9000",
+            "region_name": "eu-west-1",
+        }
+    })
+    try:
+        assert _setting(con, "s3_endpoint") == "minio:9000"
+        assert _setting(con, "s3_use_ssl") is False
+        assert _setting(con, "s3_region") == "eu-west-1"
+        assert _setting(con, "s3_url_style") == "path"
+        assert _setting(con, "s3_access_key_id") == "user"
+    finally:
+        con.close()
+
+
+def test_duckdb_connection_honors_memory_limit_env(monkeypatch):
+    """Conversions run in a pod with a cgroup limit, but DuckDB sizes its
+    default budget from detected system RAM -- so a large CSV can get the pod
+    OOMKilled instead of spilling. DUCKDB_MEMORY_LIMIT caps it."""
+    monkeypatch.setenv("DUCKDB_MEMORY_LIMIT", "256MB")
+    con = duckdb_connection({})
+    try:
+        # DuckDB reads 256MB as 256e6 bytes and reports it back in MiB.
+        assert _setting(con, "memory_limit") == "244.1 MiB"
+    finally:
+        con.close()
+
+
+def test_duckdb_connection_leaves_memory_default_when_env_unset(monkeypatch):
+    monkeypatch.delenv("DUCKDB_MEMORY_LIMIT", raising=False)
+    con = duckdb_connection({})
+    try:
+        assert _setting(con, "memory_limit") != "244.1 MiB"
+    finally:
+        con.close()
+
+
 def test_duckdb_path_strips_file_scheme_but_not_s3(tmp_path):
     assert duckdb_path("s3://bucket/a/b.csv") == "s3://bucket/a/b.csv"
     # tmp_path, not a hardcoded POSIX path: file URIs require an absolute path,

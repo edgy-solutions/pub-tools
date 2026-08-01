@@ -14,29 +14,21 @@ without re-downloading a multi-hundred-megabyte archive.
 """
 import os
 import zipfile
-from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urlparse
+from typing import Any, Dict, List, Optional
 
 import fsspec
+
+# The DuckDB connection setup this module used to carry by hand -- httpfs
+# loading, endpoint reshaping, the S3 SET statements -- now lives in
+# dag-tools, which needs it for its own DuckDB IO manager. `duckdb_path` is
+# re-exported because callers here and in the tests import it from this
+# module.
+from dag_tools.resources.duckdb import DuckDBResource, duckdb_path  # noqa: F401
 
 # Everything is read and written as text. PUB LOG is full of identifiers whose
 # leading zeros carry meaning -- NSNs, NIINs, FSCs, CAGE codes -- and letting a
 # type inferencer turn "01234" into the integer 1234 silently corrupts them.
 DUCKDB_READ_CSV_OPTIONS = "all_varchar=true, header=true, null_padding=true"
-
-
-def _split_endpoint(endpoint_url: Optional[str]) -> Tuple[Optional[str], bool]:
-    """Split `http://minio:9000` into ("minio:9000", use_ssl=False).
-
-    DuckDB wants the bare host:port in `s3_endpoint` plus a separate
-    `s3_use_ssl` flag, where fsspec/boto want the full URL.
-    """
-    if not endpoint_url:
-        return None, True
-    parsed = urlparse(endpoint_url)
-    if not parsed.netloc:
-        return endpoint_url, True
-    return parsed.netloc, parsed.scheme != "http"
 
 
 def storage_options(dest_config: Dict[str, Any]) -> Dict[str, Any]:
@@ -61,6 +53,13 @@ def duckdb_connection(dest_config: Dict[str, Any]):
     httpfs is what lets DuckDB address `s3://` directly, so a multi-GiB CSV
     converts without ever landing on the pod's disk.
 
+    The wiring itself -- loading httpfs, reshaping the endpoint URL into
+    DuckDB's `s3_endpoint` + `s3_use_ssl` pair, path-style URLs for MinIO --
+    is `dag_tools.resources.duckdb.DuckDBResource`, which grew out of this
+    function and is now shared with dag-tools' DuckDB IO manager. What stays
+    here is the translation from a dlt-style destination config, and the
+    pointer to this repo's own extension-baking script.
+
     In the container image the extension is baked in at build time (see
     scripts/bake_duckdb_extensions.py) and DUCKDB_EXTENSION_DIRECTORY points at
     it. When that variable is set the image is meant to be self-contained, so a
@@ -69,68 +68,32 @@ def duckdb_connection(dest_config: Dict[str, Any]):
     confusing error, once per asset. Outside the image the variable is unset
     and a download is a reasonable convenience.
     """
-    import duckdb
-
-    con = duckdb.connect()
-    directory = os.environ.get("DUCKDB_EXTENSION_DIRECTORY")
-    if directory:
-        con.execute("SET extension_directory=?", [directory])
-        con.execute("SET autoinstall_known_extensions=false")
-        try:
-            con.execute("LOAD httpfs")
-        except Exception as e:
-            raise RuntimeError(
-                f"DuckDB {duckdb.__version__} could not load the httpfs "
-                f"extension from {directory}, which is required to read and "
-                f"write s3:// paths. The image is supposed to ship it -- "
-                f"rebuild so scripts/bake_duckdb_extensions.py runs against "
-                f"this DuckDB version, since extensions are version- and "
-                f"architecture-specific and an upgraded duckdb will not find "
-                f"an extension baked for the previous one. "
-                f"Underlying error: {e}"
-            ) from e
-    else:
-        try:
-            con.execute("LOAD httpfs")
-        except Exception:
-            try:
-                con.execute("INSTALL httpfs")
-                con.execute("LOAD httpfs")
-            except Exception as e:
-                raise RuntimeError(
-                    "DuckDB could not load or install the httpfs extension, "
-                    "which is required to read and write s3:// paths. Set "
-                    "DUCKDB_EXTENSION_DIRECTORY and run "
-                    "scripts/bake_duckdb_extensions.py to provide it offline. "
-                    f"Underlying error: {e}"
-                ) from e
-
     creds = dest_config.get("credentials") or {}
-    endpoint, use_ssl = _split_endpoint(creds.get("endpoint_url"))
-    if creds.get("aws_access_key_id"):
-        con.execute("SET s3_access_key_id=?", [creds["aws_access_key_id"]])
-    if creds.get("aws_secret_access_key"):
-        con.execute("SET s3_secret_access_key=?", [creds["aws_secret_access_key"]])
-    con.execute("SET s3_region=?", [creds.get("region_name") or "us-east-1"])
-    if endpoint:
-        con.execute("SET s3_endpoint=?", [endpoint])
-        con.execute("SET s3_use_ssl=?", [use_ssl])
-        # MinIO serves path-style buckets; virtual-host style resolves to a
-        # hostname that does not exist there.
-        con.execute("SET s3_url_style='path'")
-    return con
-
-
-def duckdb_path(url: str) -> str:
-    """DuckDB addresses local files by plain path, but object stores by URL."""
-    if url.startswith("file://"):
-        parsed = urlparse(url)
-        path = (parsed.netloc or "") + parsed.path
-        # file:///C:/x on Windows arrives as /C:/x
-        if os.name == "nt" and len(path) > 2 and path[0] == "/" and path[2] == ":":
-            path = path[1:]
-        return path
-    return url
+    resource = DuckDBResource(
+        aws_access_key_id=creds.get("aws_access_key_id"),
+        aws_secret_access_key=creds.get("aws_secret_access_key"),
+        # dlt names this `region_name`; DuckDB and boto call it region.
+        aws_region=creds.get("region_name") or "us-east-1",
+        endpoint_url=creds.get("endpoint_url"),
+        # Conversions run in a pod with a cgroup memory limit, but DuckDB
+        # sizes its default budget from detected system RAM, so on a large
+        # CSV it can exceed the pod's limit and be OOMKilled instead of
+        # spilling to disk. Capping is close to free -- measured elsewhere at
+        # 5M rows, a 256MB cap cut peak RSS from 434MB to 136MB for ~6% more
+        # wall time. Unset leaves DuckDB's own default in place.
+        memory_limit=os.environ.get("DUCKDB_MEMORY_LIMIT"),
+    )
+    try:
+        return resource.connect()
+    except RuntimeError as e:
+        # The shared resource cannot know how THIS image provides the
+        # extension, so name the script an operator here would actually run.
+        raise RuntimeError(
+            f"{e} In this image httpfs is provided by "
+            f"scripts/bake_duckdb_extensions.py -- set "
+            f"DUCKDB_EXTENSION_DIRECTORY and run it to supply the extension "
+            f"offline."
+        ) from e
 
 
 def raw_prefix(lake_root: str, as_of_date: str, slug: str) -> str:
