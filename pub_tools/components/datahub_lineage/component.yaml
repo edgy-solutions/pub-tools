@@ -20,7 +20,7 @@ type: dag_tools.components.datahub_lineage.DatahubLineageComponent
 attributes:
   datahub_config:
     # GMS base URL — NOT the GraphQL endpoint (that is a different layer).
-    server: "{{ env('DATAHUB_SERVER', 'http://datahub-datahub-gms:8080') }}"
+    server: "{{ env('DATAHUB_GMS_URL', 'http://datahub-datahub-gms:8080') }}"
 
   # make_datahub_sensor defaults to STOPPED, which presents as a broken
   # integration: the sensor exists but silently never fires. Default it on;
