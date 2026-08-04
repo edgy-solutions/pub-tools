@@ -163,9 +163,9 @@ def test_url_builders_are_stable():
     # The DuckDB IO manager owns the table layout now, so this must agree
     # with where the manager actually writes -- a freshness check against a
     # path the writer does not use silently rebuilds forever or never.
-    assert table_parquet_url("s3://lake", "p_cage") == "s3://lake/publog/p_cage.parquet"
+    assert table_parquet_url("s3://lake", "p_cage") == "s3://lake/publog/p_cage"
     assert table_parquet_url("s3://lake", "p_cage", key_prefix="other") == (
-        "s3://lake/other/p_cage.parquet"
+        "s3://lake/other/p_cage"
     )
 
 

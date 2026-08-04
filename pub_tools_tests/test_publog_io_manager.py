@@ -192,13 +192,50 @@ def test_s3_config_advertises_a_readable_ticket(monkeypatch):
         "aws_secret_access_key": "secret",
         "endpoint_url": "http://minio:9000",
     }
-    defs, _ = _table_asset(component, None)
+    defs = component.build_defs(None)
     manager = next(
         r for r in defs.resources.values() if hasattr(r, "physical_coordinates")
     )
-    ticket = manager.physical_coordinates(["publog", "p_cage"])
+
+    # The key carries <platform_instance>/<bucket>/<path>, so the advertised
+    # URI comes from the key rather than being re-derived from uri_base.
+    key = ["minio", "publog-lake", "publog", "p_cage"]
+    ticket = manager.physical_coordinates(key)
     assert ticket["source_type"] == "s3_parquet"
     # Trailing slash: a consumer's scan_parquet HEADs a slash-less S3 path
     # and 404s.
-    assert ticket["physical_uri"] == "s3://publog-lake/publog/p_cage.parquet/"
+    assert ticket["physical_uri"] == "s3://publog-lake/publog/p_cage/"
     assert ticket["credentials"]["aws_endpoint_url"] == "http://minio:9000"
+
+
+def test_s3_asset_keys_carry_instance_and_bucket(monkeypatch):
+    """The key is what makes the Dagster asset, the DataHub URN and the S3
+    path one fact. A DataHub s3 recipe with `platform_instance: minio` over
+    `s3://publog-lake/publog/{table}/*` discovers exactly this URN."""
+    from dag_tools.components.datahub_lineage.component import (
+        asset_keys_to_dataset_urn_converter as to_urn,
+    )
+
+    component = _component("s3://publog-lake", monkeypatch)
+    component.dest_config["credentials"] = {
+        "endpoint_url": "http://minio.ns.svc.cluster.local:9000",
+    }
+    defs = component.build_defs(None)
+    keys = sorted("/".join(k.path) for a in defs.assets for k in a.keys)
+
+    assert "minio/publog-lake/publog/p_cage" in keys, keys
+    assert to_urn(
+        ["minio", "publog-lake", "publog", "p_cage"], platform="s3"
+    ).urn() == (
+        "urn:li:dataset:(urn:li:dataPlatform:s3,"
+        "minio.publog-lake/publog/p_cage,PROD)"
+    )
+
+
+def test_local_lake_keeps_the_plain_key(lake, monkeypatch):
+    """No endpoint and no bucket means no platform instance to name and no
+    crawler to agree with, so the key stays as it was."""
+    component = _component(lake, monkeypatch)
+    defs = component.build_defs(None)
+    keys = sorted("/".join(k.path) for a in defs.assets for k in a.keys)
+    assert "publog/p_cage" in keys, keys

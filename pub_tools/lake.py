@@ -111,7 +111,9 @@ def marker_url(lake_root: str, as_of_date: str, slug: str) -> str:
     return f"{raw_prefix(lake_root, as_of_date, slug)}/_source.json"
 
 
-def table_parquet_url(lake_root: str, table: str, key_prefix: str = "publog") -> str:
+def table_parquet_url(
+    lake_root: str, table: str, key_prefix: str = "publog"
+) -> str:
     """Where a converted table lands.
 
     The DuckDB IO manager owns this location now, so the layout comes from
@@ -125,7 +127,14 @@ def table_parquet_url(lake_root: str, table: str, key_prefix: str = "publog") ->
     """
     from dag_tools.io_managers.duckdb import asset_uri
 
-    return asset_uri(lake_root, [key_prefix, table], directory=False)
+    # key_prefix may be a multi-segment path ("minio-svc/publog-lake/publog"),
+    # because the asset key encodes <platform_instance>/<bucket>/<path> so the
+    # Dagster key, the DataHub URN and the S3 path all derive from one string.
+    key = [*key_prefix.split("/"), table]
+    return asset_uri(
+        lake_root, key, directory=False,
+        key_encodes_location=len(key) >= 3,
+    )
 
 
 # Freshness is decided from the lake, never from Dagster's event log.

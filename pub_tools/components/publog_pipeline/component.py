@@ -58,6 +58,26 @@ def source_slug(url: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", stem.lower()).strip("_")
 
 
+def _full_key_prefix(dest_config: Dict[str, Any], lake_root: str, key_prefix: str) -> str:
+    """`<platform_instance>/<bucket>/<key_prefix>` when both are knowable.
+
+    Falls back to the bare key_prefix for a local/dev lake with no endpoint,
+    where there is no platform instance to name and no crawler to agree with.
+    """
+    from dag_tools.io_managers.duckdb import split_endpoint_instance
+
+    creds = dest_config.get("credentials") or {}
+    instance = split_endpoint_instance(creds.get("endpoint_url"))
+    bucket = None
+    if "://" in lake_root:
+        scheme, rest = lake_root.split("://", 1)
+        if scheme != "file":
+            bucket = rest.split("/", 1)[0] or None
+    if instance and bucket:
+        return f"{instance}/{bucket}/{key_prefix}"
+    return key_prefix
+
+
 def _lake_root(dest_config: Dict[str, Any], default_bucket_url: str) -> str:
     return (dest_config.get("destination", {}) or {}).get("bucket_url") or default_bucket_url
 
@@ -286,7 +306,22 @@ class PublogPipelineComponent(Component, Resolvable, Model):
     """Destination credentials and bucket configuration (dlt filesystem-style)."""
 
     key_prefix: str = "publog"
-    """Leading component of every generated asset key."""
+    """Trailing component of every generated asset key.
+
+    The FULL key is `<platform_instance>/<bucket>/<key_prefix>/<table>`, with
+    the instance derived from the S3 endpoint and the bucket from the lake
+    root. That shape is what makes the Dagster key, the DataHub URN and the
+    S3 path three views of one fact:
+
+        key  minio-svc/publog-lake/publog/p_cage
+        urn  urn:li:dataset:(urn:li:dataPlatform:s3,
+                             minio-svc.publog-lake/publog/p_cage,PROD)
+        s3   s3://publog-lake/publog/p_cage/
+
+    A DataHub s3 recipe with `platform_instance: minio-svc` over
+    `s3://publog-lake/publog/{table}/*` discovers exactly that URN, so the
+    crawled entity and the emitted one converge instead of becoming two
+    disconnected halves of the same table."""
 
     asset_name: str = "publog_lake_export"
     """Prefix for generated op, job, and schedule names."""
@@ -348,13 +383,14 @@ class PublogPipelineComponent(Component, Resolvable, Model):
         """
         dest_config = self.dest_config
         lake_root = _lake_root(dest_config, default_bucket_url)
+        key_prefix = _full_key_prefix(dest_config, lake_root, self.key_prefix)
         staging_assets, table_assets = [], []
 
         for url in urls:
             slug = source_slug(url)
             filename = source_filename(url)
             members = PUBLOG_SOURCE_MANIFEST[filename]
-            bundle_key = AssetKey([self.key_prefix, "source", slug])
+            bundle_key = AssetKey([*key_prefix.split("/"), "source", slug])
 
             # A Dagster asset function's parameters are INPUTS, not a place to
             # bind loop variables -- doing that silently invents upstream assets
@@ -393,7 +429,7 @@ class PublogPipelineComponent(Component, Resolvable, Model):
                             member=member,
                             table=table,
                             as_of_date=as_of_fn(),
-                            key_prefix=self.key_prefix,
+                            key_prefix=key_prefix,
                             lake_root=lake_root,
                             dest_config=dest_config,
                         )
@@ -402,7 +438,7 @@ class PublogPipelineComponent(Component, Resolvable, Model):
 
                 table_assets.append(
                     asset(
-                        key=AssetKey([self.key_prefix, table]),
+                        key=AssetKey([*key_prefix.split("/"), table]),
                         deps=[bundle_key],
                         group_name=self.asset_group,
                         kinds={"parquet", "duckdb"},
@@ -432,7 +468,8 @@ class PublogPipelineComponent(Component, Resolvable, Model):
                 if manager.uri_base == root:
                     return key
             key = f"{self.io_manager_key}{suffix}"
-            io_managers[key] = self._io_manager(root)
+            full = _full_key_prefix(self.dest_config, root, self.key_prefix)
+            io_managers[key] = self._io_manager(root, len(full.split('/')) >= 3)
             return key
 
         monthly_staging, monthly_tables = self._build_source_assets(
@@ -490,7 +527,9 @@ class PublogPipelineComponent(Component, Resolvable, Model):
             assets=assets, jobs=jobs, schedules=schedules, resources=io_managers
         )
 
-    def _io_manager(self, lake_root: str) -> ConfigurableDuckDBIOManager:
+    def _io_manager(
+        self, lake_root: str, key_encodes_location: bool = False
+    ) -> ConfigurableDuckDBIOManager:
         """The DuckDB IO manager the table assets write through.
 
         Registering it here rather than expecting one from the enclosing
@@ -509,6 +548,7 @@ class PublogPipelineComponent(Component, Resolvable, Model):
                 memory_limit=os.environ.get("DUCKDB_MEMORY_LIMIT"),
             ),
             uri_base=lake_root,
+            key_encodes_location=key_encodes_location,
             compression=self.parquet_compression,
             file_size_bytes=self.part_file_size,
         )
