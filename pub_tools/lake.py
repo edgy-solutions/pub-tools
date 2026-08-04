@@ -97,7 +97,25 @@ def duckdb_connection(dest_config: Dict[str, Any]):
 
 
 def raw_prefix(lake_root: str, as_of_date: str, slug: str) -> str:
-    return f"{lake_root.rstrip('/')}/_raw/{as_of_date}/{slug}"
+    """`<lake_root>/_raw/<slug>/<as_of_date>` -- slug BEFORE the date.
+
+    The order matters for the catalog. DataHub's s3 source names a dataset
+    from the path up to and including the `{table}` capture, so with the
+    date first (`_raw/<date>/<slug>`) every month produces a NEW dataset:
+
+        minio-svc.publog-lake/_raw/2026-08-01/cage
+
+    One stable Dagster asset would map to N DataHub datasets, and the
+    lineage into the tables would fan out with it. Putting the slug first
+    makes the date a partition BELOW the table, so the identity is stable
+    and the crawler agrees with what Dagster publishes:
+
+        path_spec  s3://publog-lake/_raw/{table}/{partition[0]}/*
+        urn        minio-svc.publog-lake/_raw/cage
+
+    Verified against DataHub's own PathSpec, not assumed.
+    """
+    return f"{lake_root.rstrip('/')}/_raw/{slug}/{as_of_date}"
 
 
 def raw_csv_url(lake_root: str, as_of_date: str, slug: str, member: str) -> str:

@@ -78,6 +78,44 @@ def _full_key_prefix(dest_config: Dict[str, Any], lake_root: str, key_prefix: st
     return key_prefix
 
 
+def _raw_catalog_metadata(lake_root: str, slug: str) -> Dict[str, str]:
+    """Platform + location for the staged CSVs, for the catalog sensor.
+
+    Without a declared platform the sensor has nothing to resolve and
+    registers the staging asset as a dataPlatform:dagster entity -- which
+    a `_raw` s3 crawler would never match, leaving two nodes for one
+    prefix. "s3" passes through the platform mapping unchanged.
+
+    Undated on purpose: this names the stable prefix a crawler discovers,
+    with the date a partition beneath it. See lake.raw_prefix.
+    """
+    if not lake_root.startswith("s3://"):
+        return {}
+    return {
+        "destination_name": "s3",
+        "uri": f"{lake_root.rstrip('/')}/_raw/{slug}",
+    }
+
+
+def _raw_asset_key(key_prefix: str, slug: str) -> List[str]:
+    """Asset key for a staging asset, matching where its bytes actually land.
+
+    The staged CSVs go to `<bucket>/_raw/<slug>/`, so the key is
+    `<instance>/<bucket>/_raw/<slug>` -- NOT under the table key_prefix.
+    That makes the Dagster key, the DataHub URN and the S3 prefix agree,
+    so a `_raw` crawler reconciles with what Dagster publishes instead of
+    creating a second, disconnected node.
+
+    Local/dev keys (no instance, no bucket) keep the old `publog/source/
+    <slug>` shape: nothing will crawl a file:// lake.
+    """
+    parts = key_prefix.split("/")
+    if len(parts) >= 3:
+        instance, bucket = parts[0], parts[1]
+        return [instance, bucket, "_raw", slug]
+    return [key_prefix, "source", slug]
+
+
 def _lake_root(dest_config: Dict[str, Any], default_bucket_url: str) -> str:
     return (dest_config.get("destination", {}) or {}).get("bucket_url") or default_bucket_url
 
@@ -123,6 +161,7 @@ def _stage_source(
                     "as_of_date": as_of_date,
                     "url": url,
                     "raw_prefix": prefix,
+                    **_raw_catalog_metadata(lake_root, slug),
                 }
             )
         context.log.warning(
@@ -177,6 +216,7 @@ def _stage_source(
             "staged_bytes": sum(v["size_bytes"] for v in staged.values()),
             "staged_members": sorted(staged),
             "missing_members": missing,
+            **_raw_catalog_metadata(lake_root, slug),
         }
     )
 
@@ -390,7 +430,7 @@ class PublogPipelineComponent(Component, Resolvable, Model):
             slug = source_slug(url)
             filename = source_filename(url)
             members = PUBLOG_SOURCE_MANIFEST[filename]
-            bundle_key = AssetKey([*key_prefix.split("/"), "source", slug])
+            bundle_key = AssetKey(_raw_asset_key(key_prefix, slug))
 
             # A Dagster asset function's parameters are INPUTS, not a place to
             # bind loop variables -- doing that silently invents upstream assets

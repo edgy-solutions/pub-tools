@@ -155,10 +155,10 @@ def test_duckdb_path_strips_file_scheme_but_not_s3(tmp_path):
 
 def test_url_builders_are_stable():
     assert raw_csv_url("s3://lake/", "2026-07-01", "cage", "sub/dir/P_CAGE.CSV") == (
-        "s3://lake/_raw/2026-07-01/cage/P_CAGE.CSV"
+        "s3://lake/_raw/cage/2026-07-01/P_CAGE.CSV"
     )
     assert marker_url("s3://lake", "2026-07-01", "cage") == (
-        "s3://lake/_raw/2026-07-01/cage/_source.json"
+        "s3://lake/_raw/cage/2026-07-01/_source.json"
     )
     # The DuckDB IO manager owns the table layout now, so this must agree
     # with where the manager actually writes -- a freshness check against a
