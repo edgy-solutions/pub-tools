@@ -30,6 +30,7 @@ from pub_tools.assets import (
     table_name_for,
 )
 from pub_tools.lake import (
+    MERGE_OVERFLOW_TABLES,
     csv_relation,
     dataset_mtime,
     duckdb_connection,
@@ -293,7 +294,7 @@ def _convert_table(
             "source_url": url,
         }
     )
-    return csv_relation(con, csv_url)
+    return csv_relation(con, csv_url, merge_overflow=table in MERGE_OVERFLOW_TABLES)
 
 
 class PublogPipelineComponent(Component, Resolvable, Model):

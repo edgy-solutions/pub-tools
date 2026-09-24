@@ -291,10 +291,10 @@ def stage_zip_to_lake(
 
         if not filename.lower().endswith(".zip"):
             target = raw_csv_url(lake_root, as_of_date, slug, filename)
-            _copy_local_to_url(local, target, options)
+            written = _copy_local_to_url(local, target, options, filename, log)
             staged[filename] = {
                 "url": target,
-                "size_bytes": os.path.getsize(local),
+                "size_bytes": written,
             }
             if log:
                 log.info("  staged %s -> %s", filename, target)
@@ -320,10 +320,13 @@ def stage_zip_to_lake(
                     )
                 with z.open(name) as src:
                     with fsspec.open(target, "wb", **options) as dst:
-                        _stream(src, dst)
+                        written = _stream_utf8_normalized(src, dst, member, log=log)
                 staged[os.path.basename(member)] = {
                     "url": target,
-                    "size_bytes": info.file_size,
+                    # The repaired byte count, not `info.file_size`: a cp1252
+                    # repair can change the byte length (a 1-byte 0x96
+                    # becomes the 3-byte UTF-8 encoding of U+2013).
+                    "size_bytes": written,
                 }
 
         # Anything in the archive that the manifest does not declare has no
@@ -339,20 +342,121 @@ def stage_zip_to_lake(
     return staged
 
 
-def _stream(src, dst, chunk_size: int = 8 * 1024 * 1024) -> int:
+def _stream_utf8_normalized(
+    src, dst, member: str, chunk_size: int = 8 * 1024 * 1024, log=None
+) -> int:
+    """Copy src to dst, repairing the rare stray CP1252 byte among otherwise
+    valid UTF-8.
+
+    PUB LOG exports are UTF-8, but at least one file (IDENTIFICATION.zip /
+    P_HELP.CSV, line 22624) carries a single stray CP1252 byte (0x96, an en
+    dash) that DuckDB 1.5.5 cannot read under any read_csv option -- latin-1
+    refuses the file outright, and ignore_errors / store_rejects both hit an
+    internal DuckDB error. Other files contain *legitimate* multi-byte UTF-8
+    (en dashes, degree signs, curly quotes) in the same column shapes, so
+    blanket-decoding everything as CP1252 would silently corrupt those. The
+    fix instead assumes UTF-8 and only falls back to CP1252 for the exact
+    line(s) that fail to decode as UTF-8.
+
+    Each chunk is split at its last newline and the remainder carried into
+    the next read, so a line is never decoded half in one chunk and half in
+    another -- a chunk boundary landing inside a multi-byte UTF-8 character
+    could otherwise produce a false decode failure, or a false decode success
+    that reassembles the wrong character.
+
+    A whole-chunk fast path (`chunk.decode("utf-8")` succeeds) writes the
+    original bytes unchanged, so a file that is already valid UTF-8 passes
+    through byte-for-byte. Only a chunk that fails to decode falls back to a
+    per-line check.
+    """
     total = 0
+    line_number = 1
+    carry = b""
     while True:
         chunk = src.read(chunk_size)
         if not chunk:
-            return total
-        dst.write(chunk)
-        total += len(chunk)
+            break
+        chunk = carry + chunk
+        split = chunk.rfind(b"\n")
+        if split == -1:
+            # No complete line in this chunk yet -- keep accumulating rather
+            # than risk decoding (or writing) a partial line.
+            carry = chunk
+            continue
+        piece, carry = chunk[: split + 1], chunk[split + 1 :]
+        total += _write_normalized_piece(piece, dst, member, line_number, log)
+        line_number += piece.count(b"\n")
+    if carry:
+        total += _write_normalized_piece(carry, dst, member, line_number, log)
+    return total
 
 
-def _copy_local_to_url(local_path: str, target: str, options: Dict[str, Any]) -> None:
+def _write_normalized_piece(piece: bytes, dst, member: str, start_line: int, log) -> int:
+    """Write one newline-aligned piece, repairing it if it is not valid UTF-8.
+
+    Returns the number of bytes written (can differ from `len(piece)` when a
+    repair re-encodes a byte, so the caller cannot assume size_bytes ==
+    input size for a staged file).
+    """
+    try:
+        piece.decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    else:
+        dst.write(piece)
+        return len(piece)
+
+    # Slow path: at least one line in this piece is not valid UTF-8. Repair
+    # line by line so the many valid lines pass through unchanged and only
+    # the rare bad one pays for a per-line cp1252 decode.
+    out = bytearray()
+    line_number = start_line
+    for line in piece.splitlines(keepends=True):
+        try:
+            line.decode("utf-8")
+        except UnicodeDecodeError:
+            fixed = _repair_line_cp1252(line)
+            out.extend(fixed)
+            if log:
+                log.warning(
+                    "%s:%d: repaired non-UTF-8 byte(s): %s",
+                    member, line_number, _excerpt(line, fixed),
+                )
+        else:
+            out.extend(line)
+        line_number += line.count(b"\n")
+    dst.write(bytes(out))
+    return len(out)
+
+
+def _repair_line_cp1252(line: bytes) -> bytes:
+    """Re-encode a non-UTF-8 line as UTF-8, reading it as CP1252.
+
+    errors="replace" is the last resort for cp1252's five genuinely
+    undefined byte values (0x81, 0x8D, 0x8F, 0x90, 0x9D) -- everything else
+    in cp1252, including 0x96 (en dash), decodes cleanly.
+    """
+    return line.decode("cp1252", errors="replace").encode("utf-8")
+
+
+def _excerpt(original: bytes, fixed: bytes, width: int = 80) -> str:
+    """~`width` chars of the repaired line, centered on the repaired byte."""
+    try:
+        original.decode("utf-8")
+        pos = 0
+    except UnicodeDecodeError as e:
+        pos = e.start
+    text = fixed.decode("utf-8", errors="replace")
+    start = max(0, pos - width // 2)
+    return text[start : start + width]
+
+
+def _copy_local_to_url(
+    local_path: str, target: str, options: Dict[str, Any], member: str, log=None
+) -> int:
     with open(local_path, "rb") as src:
         with fsspec.open(target, "wb", **options) as dst:
-            _stream(src, dst)
+            return _stream_utf8_normalized(src, dst, member, log=log)
 
 
 def clean_header(s: str) -> str:
@@ -370,20 +474,40 @@ def _quote(identifier: str) -> str:
     return '"' + identifier.replace('"', '""') + '"'
 
 
-def _projection(con, csv_path: str) -> str:
-    """Build the SELECT that renames CSV headers to lake column names.
+# Tables whose trailing column should absorb overflow fields caused by DLA's
+# export turning embedded line breaks into field separators (see
+# `_merge_overflow_projection` below). Only V_CHARACTERISTICS is known to have
+# this problem -- its last column, CLEAR_TEXT_REPLY, is free text. Every
+# other table keeps failing loudly on a ragged row, because for them a
+# column-count mismatch is far more likely to mean real corruption than a
+# stray line break, and folding it into the last column would hide that.
+# Name as produced by `table_name_for` in pub_tools/assets.py.
+MERGE_OVERFLOW_TABLES = {"v_characteristics"}
 
-    DuckDB keeps the raw header (`CAGE Code`); the lake has always used cleaned
-    names (`cage_code`), and downstream consumers depend on those. Short rows
-    are null-padded on read, so COALESCE restores the empty string the previous
-    row-by-row loader produced rather than introducing NULLs.
+# How many extra fields a ragged row may carry beyond the declared header
+# columns before `merge_overflow` still fails loudly. The 12 known ragged
+# V_CHARACTERISTICS rows have at most 3 extra fields; 16 is generous headroom
+# without disabling the loud-failure safety net for a truly corrupt row.
+OVERFLOW_COLUMNS = 16
+
+
+def _sql_literal(s: str) -> str:
+    return "'" + s.replace("'", "''") + "'"
+
+
+def _header_names(con, csv_path: str) -> List[str]:
+    """The raw CSV header, via a LIMIT 0 read (the sniffer decides dialect
+    and column count from its sample, same as any other read of this file).
     """
     described = con.execute(
         f"SELECT * FROM read_csv('{csv_path}', {DUCKDB_READ_CSV_OPTIONS}) LIMIT 0"
     ).description
-    raw_names = [d[0] for d in described]
+    return [d[0] for d in described]
 
-    projected: List[str] = []
+
+def _clean_names(raw_names: List[str]) -> List[str]:
+    """Deduplicated `clean_header` names, in header order."""
+    names: List[str] = []
     used: Dict[str, int] = {}
     for raw in raw_names:
         name = clean_header(raw)
@@ -392,13 +516,97 @@ def _projection(con, csv_path: str) -> str:
             name = f"{name}_{used[name]}"
         else:
             used[name] = 1
-        projected.append(
-            f"COALESCE({_quote(raw)}, '') AS {_quote(name)}"
-        )
+        names.append(name)
+    return names
+
+
+def _merge_overflow_projection(raw_names: List[str], names: List[str]) -> str:
+    """Build the SELECT list for a `merge_overflow` table.
+
+    DLA's export turned embedded line breaks inside V_CHARACTERISTICS'
+    CLEAR_TEXT_REPLY into field separators, so a handful of rows have more
+    fields than the header declares. OVERFLOW_COLUMNS extra VARCHAR columns
+    (declared by `_read_csv_expr`) absorb any fields past the real header;
+    the last real column is then `concat_ws(chr(10), ...)` of itself plus
+    the overflow columns, rejoining them with the newline DLA's export
+    turned into a comma in the first place. concat_ws skips NULLs, so a
+    normal row (whose overflow columns are null_padded) is projected
+    unchanged.
+    """
+    overflow = [f"overflow_{i}" for i in range(1, OVERFLOW_COLUMNS + 1)]
+    last = len(raw_names) - 1
+    projected = []
+    for i, (raw, name) in enumerate(zip(raw_names, names)):
+        if i == last:
+            merge_from = ", ".join(_quote(c) for c in [raw, *overflow])
+            projected.append(
+                f"COALESCE(concat_ws(chr(10), {merge_from}), '') AS {_quote(name)}"
+            )
+        else:
+            projected.append(f"COALESCE({_quote(raw)}, '') AS {_quote(name)}")
     return ", ".join(projected)
 
 
-def csv_relation(con, csv_url: str):
+def _read_csv_expr(
+    csv_path: str, merge_overflow: bool, raw_names: Optional[List[str]] = None
+) -> str:
+    """The `read_csv(...)` call to select the projection FROM.
+
+    Plain `DUCKDB_READ_CSV_OPTIONS` when merge_overflow is False -- behaviour
+    identical to before this existed.
+
+    When True, every column (header names plus OVERFLOW_COLUMNS overflow
+    columns) is declared explicitly (`columns=...`) with `auto_detect=false`,
+    so the sniffer's ragged-row column count never comes into play -- inside
+    its sample it invents phantom `column04..` columns, and past its sample
+    it raises "Expected Number of Columns"; declaring the columns ourselves
+    is what `_merge_overflow_projection`'s docstring calls "the sniffer must
+    not decide the column count". `auto_detect=false` only fixes the column
+    count; DuckDB still sniffs the dialect (delimiter/quote/escape), which is
+    what lets null_padding keep padding genuinely short rows as before. A row
+    with more fields than header + OVERFLOW_COLUMNS still has nowhere to go
+    and DuckDB still raises -- the loud-failure safety net for a row that is
+    not this known shape stays intact.
+    """
+    if not merge_overflow:
+        return f"read_csv('{csv_path}', {DUCKDB_READ_CSV_OPTIONS})"
+
+    overflow = [f"overflow_{i}" for i in range(1, OVERFLOW_COLUMNS + 1)]
+    columns = ", ".join(
+        f"{_sql_literal(c)}: 'VARCHAR'" for c in [*raw_names, *overflow]
+    )
+    return (
+        f"read_csv('{csv_path}', {DUCKDB_READ_CSV_OPTIONS}, "
+        f"columns={{{columns}}}, auto_detect=false)"
+    )
+
+
+def _projection_and_source(con, csv_path: str, merge_overflow: bool):
+    """The (SELECT list, read_csv(...) FROM-expression) pair for a CSV.
+
+    DuckDB keeps the raw header (`CAGE Code`); the lake has always used
+    cleaned names (`cage_code`), and downstream consumers depend on those.
+    Short rows are null-padded on read, so COALESCE restores the empty
+    string the previous row-by-row loader produced rather than introducing
+    NULLs.
+
+    One LIMIT 0 header read either way; merge_overflow reuses those same raw
+    names to declare the read_csv columns, rather than sniffing twice.
+    """
+    raw_names = _header_names(con, csv_path)
+    names = _clean_names(raw_names)
+    if merge_overflow:
+        projection = _merge_overflow_projection(raw_names, names)
+    else:
+        projection = ", ".join(
+            f"COALESCE({_quote(raw)}, '') AS {_quote(name)}"
+            for raw, name in zip(raw_names, names)
+        )
+    read_csv_expr = _read_csv_expr(csv_path, merge_overflow, raw_names)
+    return projection, read_csv_expr
+
+
+def csv_relation(con, csv_url: str, merge_overflow: bool = False):
     """The staged CSV as a lazy DuckDB relation, headers cleaned.
 
     Nothing is read yet -- the relation is a query. The DuckDB IO manager
@@ -407,12 +615,15 @@ def csv_relation(con, csv_url: str):
 
     The connection must outlive the asset that builds this, since the query
     only runs later; see `DuckDBResource.connect` versus `get_connection`.
+
+    `merge_overflow` folds trailing overflow fields back into the last
+    column instead of failing on a ragged row -- see
+    `_merge_overflow_projection`. Only tables in MERGE_OVERFLOW_TABLES should
+    pass True.
     """
     csv_path = duckdb_path(csv_url)
-    return con.sql(
-        f"SELECT {_projection(con, csv_path)} FROM "
-        f"read_csv('{csv_path}', {DUCKDB_READ_CSV_OPTIONS})"
-    )
+    projection, read_csv_expr = _projection_and_source(con, csv_path, merge_overflow)
+    return con.sql(f"SELECT {projection} FROM {read_csv_expr}")
 
 
 def csv_to_parquet(
@@ -421,11 +632,14 @@ def csv_to_parquet(
     parquet_url: str,
     compression: str = "zstd",
     log=None,
+    merge_overflow: bool = False,
 ) -> int:
     """Convert one staged CSV to one Parquet file. Returns the row count.
 
     DuckDB streams this in vectorised C++ rather than a per-row Python loop,
     which is where the previous loader spent nearly all of its time.
+
+    See `csv_relation` for `merge_overflow`.
     """
     csv_path = duckdb_path(csv_url)
     parquet_path = duckdb_path(parquet_url)
@@ -434,12 +648,11 @@ def csv_to_parquet(
     if not parquet_path.startswith(("s3://", "gs://", "az://", "http")):
         os.makedirs(parent, exist_ok=True)
 
-    projection = _projection(con, csv_path)
+    projection, read_csv_expr = _projection_and_source(con, csv_path, merge_overflow)
     if log:
         log.info("Converting %s -> %s", csv_url, parquet_url)
     con.execute(
-        f"COPY (SELECT {projection} FROM read_csv('{csv_path}', "
-        f"{DUCKDB_READ_CSV_OPTIONS})) TO '{parquet_path}' "
+        f"COPY (SELECT {projection} FROM {read_csv_expr}) TO '{parquet_path}' "
         f"(FORMAT PARQUET, COMPRESSION {compression})"
     )
     # Parquet stores its row count in the footer, so this does not rescan.
