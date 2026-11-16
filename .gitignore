@@ -11,3 +11,7 @@ __pycache__/
 
 # Dagster temporary directories
 .tmp_dagster_home_*/
+
+# Lane session files (packets, handoffs) are placed here and never committed.
+# Rule: AGENTS.md "Session files" (invincible-agent fd7df47d, ruled 2026-11-12).
+sessions/

@@ -25,3 +25,8 @@ If you install a new core technology (e.g., adding `duckdb` or `dbt`), you MUST 
 1.  `llms.txt` (if the domain/intent changes).
 2.  `.cursorrules` (if the enforced stack rules change).
 3.  `README.md` (to ensure human developers can run it).
+
+### 4. Session Files Are Never Committed
+Lane packets and handoffs live in `sessions/`, which `.gitignore` excludes. Nobody commits a session file, pushes one, or force-adds one with `git add -f`. A sender places its packet in the recipient's `sessions/` folder, and the recipient reads it there.
+
+The rule is owned by invincible-agent (`AGENTS.md`, "SESSION FILES ARE PLACED, NEVER COMMITTED", commit `fd7df47d`, ruled 2026-11-12). This section applies it here; it is not a separate decision.
