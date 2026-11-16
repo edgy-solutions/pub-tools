@@ -4,12 +4,12 @@ description: Coding standards and technology stack rules for the pub-tools repos
 
 # `pub-tools` Tech Stack & Rules
 
-This project uses a modern Python data engineering stack centered around orchestration and fast ingestion.
+This project ingests DLA PUB LOG into an S3 Parquet lake. Dagster orchestrates it and DuckDB converts the data.
 
 ## 1. Dependency Management (`uv`)
-- **Rule**: NEVER use `pip`, `poetry`, or `conda` directly. 
+- **Rule**: NEVER use `pip`, `poetry`, or `conda` directly.
 - **Tool**: Always use `uv` for all environment and dependency management.
-- **Commands**: 
+- **Commands**:
   - Install dependencies: `uv add <package>`
   - Run scripts: `uv run <script>`
   - Sync lockfile: `uv sync`
@@ -19,12 +19,13 @@ This project uses a modern Python data engineering stack centered around orchest
 - **Rule**: All data workflows must be defined as Dagster `@asset`s, `@job`s, or declarative components.
 - **Architecture**: Do not write standalone cron scripts. Everything must be executable within the Dagster UI/Daemon. Use Dagster's declarative component framework (`component.yaml`) for configuring pipelines.
 
-## 3. Data Ingestion (`dlt`)
-- **Rule**: Avoid writing custom requests/pandas ETL logic for moving data from A to B.
-- **Tool**: Use `dlthub` (`dlt`) to create robust, streaming pipelines capable of handling massive files (like DLA flat-files).
-- **Format**: All data lake destinations should write in Parquet format (`dlt[parquet]`) using the filesystem/S3 destination.
+## 3. Data Movement (`duckdb` through dag-tools)
+- **Rule**: Conversions are DuckDB SQL over object storage (`httpfs`). Do not add requests/pandas ETL, and do not add dlt.
+- **Writing**: A table asset returns a lazy DuckDB relation. dag-tools' `ConfigurableDuckDBIOManager` writes it as Parquet and owns the lake layout. Do not write Parquet yourself, and do not spell out the table path a second time (`table_parquet_url` derives it from `dag_tools.io_managers.duckdb.asset_uri`).
+- **Reading**: Read CSVs with `DUCKDB_READ_CSV_OPTIONS` (`all_varchar=true`). Every column lands as VARCHAR; do not infer types at ingest.
+- **Identity**: Asset keys (`<platform_instance>/<bucket>/<key_prefix>/<table>`) are dataset identities in DataHub. Do not change them without a migration.
 
 ## 4. Python Style
 - **Type Hinting**: All function signatures must include strict Python type hints (e.g., `def parse(row: dict) -> Iterator[str]:`).
-- **Docstrings**: Provide a brief Google-style or standard docstring explaining the purpose of complex parsing functions and all Dagster assets. 
-- **Efficiency**: When processing flat files (like PUB LOG), always use generators (`yield`) instead of loading entire files into memory (no massive `pd.read_csv`).
+- **Docstrings**: Provide a brief Google-style or standard docstring explaining the purpose of complex parsing functions and all Dagster assets.
+- **Efficiency**: Never load a whole source file into Python memory (no `pd.read_csv`, no `.read()` of an archive member). Stream bytes, or let DuckDB read the file where it lies.
