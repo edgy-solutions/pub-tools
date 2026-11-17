@@ -1,19 +1,21 @@
 # pub_tools Project Context
-This document provides high-level context for AI tools and agents exploring this repository.
+This document gives high-level context to AI tools and agents exploring this repository.
 
 ## Domain
-`pub_tools` is a high-performance data ingestion pipeline project built for processing large, public government datasets, notably the Defense Logistics Agency (DLA) PUB LOG dataset.
+`pub_tools` ingests large public government datasets, chiefly the Defense Logistics Agency (DLA) PUB LOG, which is published as CSV archives in the FLIS Electronic Reading Room.
 
 ## Architecture
-The core architecture consists of two main technologies:
-1.  **Dagster**: The orchestration engine. All pipelines, schedules, and assets are defined as Dagster `@asset` or `@job` components, and configured via declarative component YAML files.
-2.  **dlt (data load tool)**: The data movement framework. Instead of writing custom ETL logic, we use `dlt`'s `@dlt.resource` generators to efficiently stream large, unstructured flat-files (like pipe-delimited `|` text files) directly into destinations.
+1.  **Dagster** is the orchestrator. The pipeline is a declarative component (`pub_tools/components/publog_pipeline`) configured by `component.yaml`. It builds one staging asset per source archive and one conversion asset per table, plus monthly and quarterly schedules.
+2.  **DuckDB** does the data movement. Staging streams each archive's CSV members into the lake under `_raw/<slug>/<as_of_date>/`. Each table asset reads its staged CSV with DuckDB (`all_varchar=true`, over `httpfs`) and returns a lazy relation. dag-tools' `ConfigurableDuckDBIOManager` writes that relation to Parquet.
+3.  **dag-tools** (a git dependency) provides the DuckDB IO manager, the DataHub lineage component and the domain broker that registers the tables with the mesh.
+
+dlt is not used. The component's `dest_config` keeps a dlt-style shape only for configuration.
 
 ## Infrastructure
-The target destination for the ingested datasets is an Amazon S3-backed Data Lake, formatted as **Parquet** (`dlt[s3,parquet]`). The pipelines are designed to handle full-fidelity, memory-efficient streams of massive flat files.
+The destination is an S3-compatible Parquet lake (`PUBLOG_S3_BUCKET_URL`, default `s3://publog-lake`). Each table is a directory of Parquet parts at `<lake_root>/<key_prefix>/<table>.parquet/`, replaced in place on each run. Asset keys are `<platform_instance>/<bucket>/<key_prefix>/<table>`, and DataHub uses the same names, so changing a key changes a dataset's identity.
 
 ## Local Execution
-The project is executable locally for development and testing:
 ```bash
+uv run --frozen pytest -q pub_tools_tests
 uv run dagster dev
 ```
