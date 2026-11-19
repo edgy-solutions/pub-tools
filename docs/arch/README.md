@@ -12,12 +12,14 @@ The vocabulary is the same as dag-tools `docs/arch/README.md`. Every claim carri
 
 | Status | Means | Evidence it needs |
 |---|---|---|
-| `measured` | A recorded run against a running system showed it. | The record of the run. A commit message that reports the run and its result counts, and the row cites the commit. Having a test that could measure it is not enough. |
+| `measured` | A recorded run against a running system showed it. | The record of the run. It must be a result that can be re-read: a CI run id, a committed result file or a release record. Having a test that could measure it is not enough. |
 | `built` | Code at the pinned commit does it. | A file and line. A test that pins it, when one exists; when none does, the row says so. |
 | `accepted` | A decision record or ruling accepts it, and no code does it yet. | The decision record or ruling. |
 | `proposed` | It is written down as intent, but not accepted or built. | Where it is written. |
 
-A gap with nothing built is written `not built`. A fact that code, charts and tests do not establish is written **not established**, and is listed at the end of its record.
+A run reported only in a commit message, a docstring or a code comment is not `measured`; the claim is `built`, with a note citing where the run is reported. This is the architect's ruling of 2026-11-19. The status vocabulary is the architect's; a lane proposes changes to it, and does not make them.
+
+A gap with nothing built is written `not built`. A gap that exposes something now, in code at the pin, is called a **present exposure**. A fact that code, charts and tests do not establish is written **not established**, and is listed at the end of its record.
 
 ## Pins
 

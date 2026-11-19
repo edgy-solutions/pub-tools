@@ -31,8 +31,8 @@ pub-tools ships as one container image, built by the repo's workflow. The deploy
 
 ## Gaps
 
-- **Readers receive write credentials** (finding 5). Moving the dag-tools pin to v0.16.0 closes this in code. That move is held by the architect's ruling of 2026-11-16, pending the store's answer on role assumption for the identity the next chart release gives consumers. `not built` here
-- **Registration and resolution are unauthenticated** (finding 6). `not built` at the pin
+- **Present exposure: readers receive write credentials** (finding 5). Any caller that resolves a pub-tools table gets the key pair pub-tools writes with. Moving the dag-tools pin to v0.16.0 closes this in code. That move is held by the architect's ruling of 2026-11-16, pending the store's answer on role assumption for the identity the next chart release gives consumers. `not built` here
+- **Present exposure: registration and resolution are unauthenticated** (finding 6). Any caller that can reach the broker can resolve a table, and so receive the key pair above; any caller that can reach the gateway can register a route for any name, replacing the one there. Authentication on both is `not built` at the pin.
 - **The key pair is a plain chart value, not a secret** (finding 7). `built`
 - **The `uv` tool is taken from an unpinned tag** (finding 1). `built`
 - **CI runs no tests** (finding 9). `not built`
@@ -55,7 +55,7 @@ pub-tools paths are at `90fba4acf08ac7c6758ff349636648aac19f71a8`. dag-tools pat
 | Broker reads `physical_coordinates`; registers with the gateway | dag-tools `dag_tools/domain_broker/main.py:75`, `:327-343` | `pub_tools_tests/test_publog_io_manager.py:173` | `built` |
 | Ticket carries the producer's key pair, returned unchanged | dag-tools `dag_tools/io_managers/duckdb.py:428`, `:465-476`; dag-tools `dag_tools/domain_broker/main.py:451-468` | `pub_tools_tests/test_publog_io_manager.py:185` | `built` |
 | v0.16.0 replaces it | dag-tools `78d59794` `dag_tools/io_managers/duckdb.py:481`; dag-tools ADR-0044 | at v0.16.0, `test_publog_io_manager.py:185` fails as expected | `built` in dag-tools |
-| No credential on register or resolve | dag-tools `dag_tools/domain_broker/main.py:327-343`, `:451-468` | no test | `built` |
+| No credential on register or resolve; the gateway overwrites a name's route on any register | dag-tools `dag_tools/domain_broker/main.py:327-343`, `:451-468`; dag-tools `dag_tools/central_gateway/main.py:96-110` | no test | `built` |
 | Key pair as plain chart values; other settings | invincible-agent `helm/invincible-agent/values.yaml:1197-1265` | invincible-agent `tests/test_pub_tools_chart_env_is_read_by_its_code.py` (`5ae27397`) | `built` |
 | One run at a time; 3 Gi | invincible-agent `helm/invincible-agent/values.yaml:424`, `:1197-1265` | no test | `built` |
 | Push only from `master` and tags; no tests in CI | `.github/workflows/build-container.yml:3-11`, `:124-131`, `:137`, `:140` | no test | `built` |
