@@ -2,7 +2,7 @@
 
 Ingests the Defense Logistics Agency (DLA) PUB LOG, published as CSV archives in the FLIS Electronic Reading Room, into an S3 Parquet lake.
 
-[Dagster](https://dagster.io/) orchestrates it. [DuckDB](https://duckdb.org/) does the conversion, reading and writing object storage directly.
+Dagster orchestrates it. DuckDB does the conversion, reading and writing object storage directly.
 
 ## How it works
 
@@ -25,13 +25,13 @@ The code reads these environment variables:
 
 | Variable | Read by | Default |
 |---|---|---|
-| `PUBLOG_S3_BUCKET_URL` | `publog_instance/component.yaml` | `s3://publog-lake` |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `publog_instance/component.yaml` | `minioadmin` |
-| `AWS_ENDPOINT_URL` | `publog_instance/component.yaml` | `http://minio:9000` |
+| `PUBLOG_S3_BUCKET_URL` | `publog_instance/component.yaml` | a local bucket, at `component.yaml:22` |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `publog_instance/component.yaml` | the local store's development default, at `component.yaml:24-25`. Set both in any deployment |
+| `AWS_ENDPOINT_URL` | `publog_instance/component.yaml` | the local store's service, at `component.yaml:26` |
 | `PUBLOG_MONTHLY_CRON`, `PUBLOG_QUARTERLY_CRON`, `PUBLOG_SCHEDULE_TZ` | `publog_instance/component.yaml` | `0 14 2 * *`, `0 14 2 1,4,7,10 *`, `UTC` |
 | `PUBLOG_MAX_CONCURRENT` | `publog_instance/component.yaml` | `4` |
 | `DUCKDB_MEMORY_LIMIT` | `pub_tools/lake.py`, `publog_pipeline/component.py` | DuckDB's own |
-| `DATAHUB_GMS_URL` | `datahub_lineage/component.yaml` | `http://datahub-datahub-gms:8080` |
+| `DATAHUB_GMS_URL` | `datahub_lineage/component.yaml` | the catalog's service in the same cluster, at `component.yaml:23` |
 | `DATAHUB_SENSOR_STATUS` | `datahub_lineage/component.yaml` | `RUNNING` |
 | `DATAHUB_TOKEN` | dag-tools `DatahubLineageComponent` | none |
 
@@ -49,7 +49,7 @@ uv run --frozen pytest -q pub_tools_tests
 uv run dagster dev
 ```
 
-Open http://localhost:3000 to see the assets. A run needs an S3 endpoint. `example/` has a Docker Compose setup with MinIO.
+Open the address that `dagster dev` prints to see the assets. A run needs an S3 endpoint. `example/` has a Docker Compose setup with MinIO.
 
 ## Important AI context files
 
