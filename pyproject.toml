@@ -68,7 +68,12 @@ dependencies = [
     # "dagtools", which is taken). The requirement name must match the
     # package's own metadata or uv fails to build the git dependency.
     # The import name is unaffected and stays `dag_tools`.
-    "edgy-dag-tools[broker] @ git+https://github.com/edgy-solutions/dag-tools.git@master",
+    # The pin is the release tag v0.17.0, the same release the rest of the
+    # fleet moves to. From v0.11.0 the broker presents a service token
+    # (MESH_SERVICE_TOKEN_URL, MESH_SERVICE_CLIENT_ID,
+    # MESH_SERVICE_CLIENT_SECRET) when it registers. The ticket carries
+    # coordinates, not credentials (dag-tools ADR-0044).
+    "edgy-dag-tools[broker] @ git+https://github.com/edgy-solutions/dag-tools.git@v0.17.0",
 ]
 
 [project.optional-dependencies]
