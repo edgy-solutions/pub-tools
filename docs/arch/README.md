@@ -12,7 +12,7 @@ The vocabulary is the same as dag-tools `docs/arch/README.md`. Every claim carri
 
 | Status | Means | Evidence it needs |
 |---|---|---|
-| `measured` | A recorded run against a running system showed it. | The record of the run. Having a test that could measure it is not enough. |
+| `measured` | A recorded run against a running system showed it. | The record of the run. A commit message that reports the run and its result counts, and the row cites the commit. Having a test that could measure it is not enough. |
 | `built` | Code at the pinned commit does it. | A file and line. A test that pins it, when one exists; when none does, the row says so. |
 | `accepted` | A decision record or ruling accepts it, and no code does it yet. | The decision record or ruling. |
 | `proposed` | It is written down as intent, but not accepted or built. | Where it is written. |
