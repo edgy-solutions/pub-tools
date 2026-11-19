@@ -25,3 +25,25 @@ These records come from a census of the decisions in this repo, each checked aga
 - [ADR-0021: Parquet uses zstd with 128 MB part files, one directory per table](ADR-0021-parquet-uses-zstd-with-128-mb-part-files-one-directory-per-table.md) **built**
 - [ADR-0022: A line that fails UTF-8 decoding is re-read as CP1252, and only that line](ADR-0022-a-line-that-fails-utf-8-decoding-is-re-read-as-cp1252-and-only-that-line.md) **built**
 - [ADR-0023: Only V_CHARACTERISTICS folds overflow fields into its last column](ADR-0023-only-v-characteristics-folds-overflow-fields-into-its-last-column.md) **built**
+- [ADR-0024: The asset key is platform instance, bucket, key prefix, then table](ADR-0024-the-asset-key-is-platform-instance-bucket-key-prefix-then-table.md) **built**
+- [ADR-0025: Staged CSVs live under _raw/<slug>/<date>](ADR-0025-staged-csvs-live-under-raw-slug-date.md) **built**
+- [ADR-0026: Table paths carry no .parquet suffix](ADR-0026-table-paths-carry-no-parquet-suffix.md) **built**
+- [ADR-0027: Catalog registration happens through the sensor only](ADR-0027-catalog-registration-happens-through-the-sensor-only.md) **built**
+- [ADR-0028: The lineage sensor defaults to RUNNING](ADR-0028-the-lineage-sensor-defaults-to-running.md) **built**
+- [ADR-0029: One image runs both the webserver and the code server, with two startups](ADR-0029-one-image-runs-both-the-webserver-and-the-code-server-with-two-startups.md) **built**
+- [ADR-0030: The broker reads physical coordinates from the IO manager](ADR-0030-the-broker-reads-physical-coordinates-from-the-io-manager.md) **accepted**
+- [ADR-0031: The pub-tools name is reserved for real pipelines](ADR-0031-the-pub-tools-name-is-reserved-for-real-pipelines.md) **accepted**
+- [ADR-0032: dag-tools is a git dependency, picked up by hand](ADR-0032-dag-tools-is-a-git-dependency-picked-up-by-hand.md) **built**
+- [ADR-0033: CI builds the image from an inline Dockerfile](ADR-0033-ci-builds-the-image-from-an-inline-dockerfile.md) **built**
+- [ADR-0034: The DuckDB httpfs extension is baked into the image](ADR-0034-the-duckdb-httpfs-extension-is-baked-into-the-image.md) **built**
+- [ADR-0035: Concurrency is bounded by memory: four runs, a DuckDB memory limit, a pod limit](ADR-0035-concurrency-is-bounded-by-memory-four-runs-a-duckdb-memory-limit-a-pod-limit.md) **accepted**
+- [ADR-0036: The deployed build is held back from the master of this repo](ADR-0036-the-deployed-build-is-held-back-from-the-master-of-this-repo.md) **accepted**
+- [ADR-0037: Declared dependencies that nothing imports are kept](ADR-0037-declared-dependencies-that-nothing-imports-are-kept.md) **accepted**
+- [ADR-0038: uv is the only package tool](ADR-0038-uv-is-the-only-package-tool.md) **accepted**
+- [ADR-0039: Workflows are Dagster-only; the code still calls requests directly](ADR-0039-workflows-are-dagster-only-the-code-still-calls-requests-directly.md) **accepted**
+- [ADR-0040: The agent-facing docs describe data movement and must match the code](ADR-0040-the-agent-facing-docs-describe-data-movement-and-must-match-the-code.md) **accepted**
+- [ADR-0041: Public functions carry type hints](ADR-0041-public-functions-carry-type-hints.md) **accepted**
+- [ADR-0042: Destructive actions need explicit permission](ADR-0042-destructive-actions-need-explicit-permission.md) **accepted**
+- [ADR-0043: Credentials are never written to a file](ADR-0043-credentials-are-never-written-to-a-file.md) **accepted**
+- [ADR-0044: Code changes keep the documentation trifecta in step](ADR-0044-code-changes-keep-the-documentation-trifecta-in-step.md) **accepted**
+- [ADR-0045: Session files are never committed](ADR-0045-session-files-are-never-committed.md) **built**
