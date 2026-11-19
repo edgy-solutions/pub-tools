@@ -4,6 +4,10 @@
 
 `built`. Taken in `e5612fa`. Not deployed; see ADR-0036.
 
+## Governs
+
+CO-PT-LAKE, FL-PT-PUBLISH.
+
 ## Decision
 
 During staging, bytes are checked as UTF-8 in chunks cut at the last newline. A valid chunk is written byte for byte. For a chunk that fails, each line is checked, and only a failing line is decoded as CP1252 and re-encoded as UTF-8. The repair is logged with the member name and line number.

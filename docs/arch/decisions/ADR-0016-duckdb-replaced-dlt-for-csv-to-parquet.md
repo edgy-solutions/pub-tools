@@ -4,6 +4,10 @@
 
 `built`. Taken in `28ff07b`.
 
+## Governs
+
+CO-PT-PIPELINE, CO-PT-LAKE.
+
 ## Decision
 
 CSV to Parquet conversion is done by DuckDB. The row-by-row dlt loader is gone, and dlt is not imported anywhere in the package.

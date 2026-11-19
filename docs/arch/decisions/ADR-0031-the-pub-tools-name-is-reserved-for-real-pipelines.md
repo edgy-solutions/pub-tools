@@ -4,6 +4,10 @@
 
 `accepted`. Taken in `93b6982`.
 
+## Governs
+
+No component or flow. It is a rule for work on the repository.
+
 ## Decision
 
 The name `pub-tools` is kept for code that runs real data pipelines. Demos and mesh scaffolding live elsewhere.

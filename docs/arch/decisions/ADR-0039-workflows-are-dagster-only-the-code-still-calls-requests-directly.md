@@ -4,6 +4,10 @@
 
 `accepted`. Written in `.cursorrules:18-20`; the code departs from it in one place.
 
+## Governs
+
+CO-PT-PIPELINE.
+
 ## Decision
 
 Pipelines are written as Dagster assets and components. The rules say not to add parallel runners. DuckDB is the engine, and `.cursorrules:22-25` says not to add dlt.

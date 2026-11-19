@@ -4,6 +4,10 @@
 
 `built`. Taken in `eaa1522` and `19b778b`. The first two limits are in this repo's code and the pod limit is in the deployment chart, all at the pins.
 
+## Governs
+
+CO-PT-PIPELINE, CO-PT-IMAGE.
+
 ## Decision
 
 Three limits work together. The component runs at most four steps at once (`max_concurrent` defaults to 4). Each DuckDB connection caps its own memory by `DUCKDB_MEMORY_LIMIT`. The pod has its own limit in the deployment chart.

@@ -4,6 +4,10 @@
 
 `built`. Taken in `74445b8`.
 
+## Governs
+
+CO-PT-PIPELINE, CO-PT-LAKE, FL-PT-PUBLISH.
+
 ## Decision
 
 A table's Parquet path is `<root>/<table>/`, a directory with no `.parquet` suffix. The suffix was dropped so the object path and the asset key match.

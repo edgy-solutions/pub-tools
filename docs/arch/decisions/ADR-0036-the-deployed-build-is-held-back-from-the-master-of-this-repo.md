@@ -4,6 +4,10 @@
 
 `accepted`. Ruled 2026-11-05 by the architect; recorded in `docs/cluster-build.md` (PR #3, `263d62b`).
 
+## Governs
+
+CO-PT-IMAGE.
+
 ## Decision
 
 The deployment runs a pub-tools build that is not the current master. It is held until the two changes in `e5612fa` (ADR-0022 and ADR-0023) are carried forward on a reviewed build. A board item in invincible-agent tracks that carry-forward.

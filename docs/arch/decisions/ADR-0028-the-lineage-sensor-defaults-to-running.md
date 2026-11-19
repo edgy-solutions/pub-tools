@@ -4,6 +4,10 @@
 
 `built`. Taken in `bf34f5c`.
 
+## Governs
+
+CO-PT-CATALOG, FL-PT-PUBLISH.
+
 ## Decision
 
 The catalog sensor is created RUNNING, not STOPPED. Deployments need no manual start.

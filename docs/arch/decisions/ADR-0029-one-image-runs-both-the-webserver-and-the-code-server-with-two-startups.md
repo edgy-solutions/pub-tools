@@ -4,6 +4,10 @@
 
 `built`. Taken in `472d75c`; the deployment side is in invincible-agent at `6b3e8efd`.
 
+## Governs
+
+CO-PT-IMAGE.
+
 ## Decision
 
 The deployment chart runs one pub-tools image in two roles. The webserver is the image's default command. The code server is started by the chart with a different command. Both roles load the same definitions.

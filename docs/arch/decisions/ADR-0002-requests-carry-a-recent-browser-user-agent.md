@@ -4,6 +4,10 @@
 
 `built`. Taken in `8fed6c8`.
 
+## Governs
+
+CO-PT-PIPELINE, FL-PT-PUBLISH.
+
 ## Decision
 
 Every request to the source sends a pinned, recent desktop-browser User-Agent. The source's CDN bot manager is reported to refuse curl, wget and Schannel TLS fingerprints. The code comment says the string must not be "cleaned up" without testing against the live endpoint, or ingest will fail with a 403.

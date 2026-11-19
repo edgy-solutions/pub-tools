@@ -4,6 +4,10 @@
 
 `built`. The lock and the CI build use uv. The rule is written in `.cursorrules:9-16` and `README.md:44`, and no check enforces it.
 
+## Governs
+
+CO-PT-IMAGE.
+
 ## Decision
 
 Dependencies are managed with `uv`. The rules say not to use pip, poetry or conda directly. The CI build also uses `uv export` and `uv pip`.

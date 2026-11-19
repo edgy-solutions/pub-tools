@@ -4,6 +4,10 @@
 
 `built`. Taken in `28ff07b`.
 
+## Governs
+
+CO-PT-LAKE, FL-PT-PUBLISH.
+
 ## Decision
 
 Staging writes the `_source.json` marker only after all CSVs are staged. A later run skips staging only if the marker's Last-Modified matches the source and every declared CSV is still in the lake. If a CSV is missing, staging logs a warning and re-stages.

@@ -4,6 +4,10 @@
 
 `proposed`. Written as intent in the component docstring and in `42cb35d`; nobody has accepted or built it.
 
+## Governs
+
+CO-PT-PIPELINE.
+
 ## Decision
 
 To bring per-month Parquet snapshots back, the table assets would be partitioned. Nothing implements this.

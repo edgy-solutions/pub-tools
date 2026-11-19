@@ -4,6 +4,10 @@
 
 `accepted`. Written in `AGENTS.md:17-20`; two commits breached it.
 
+## Governs
+
+CO-PT-PIPELINE.
+
 ## Decision
 
 Credentials come from the environment and are not written to any file, even for a mock run. The deployed component file uses a well-known development default pair as a fallback for local runs.

@@ -4,6 +4,10 @@
 
 `accepted`. Written in `AGENTS.md:22-27`; the docs were brought up to date in `5bfc98e`.
 
+## Governs
+
+No component or flow. It is a rule for work on the repository.
+
 ## Decision
 
 `README.md`, `llms.txt` and `.cursorrules` state how data moves. They say DuckDB, an object store, and Parquet. They are kept in step with the code by hand.

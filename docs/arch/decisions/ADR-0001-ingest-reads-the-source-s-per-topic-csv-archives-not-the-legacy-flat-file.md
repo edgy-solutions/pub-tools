@@ -4,6 +4,10 @@
 
 `built`. Taken in `8fed6c8`.
 
+## Governs
+
+CO-PT-PIPELINE, FL-PT-PUBLISH.
+
 ## Decision
 
 Ingest reads the public PUB LOG release as the source's per-topic CSV archives. There are nine monthly zip archives. The quarterly set is one zip (the FLISV topic) and five bare CSV files (the MRD files). Each zip holds one CSV per logical table.

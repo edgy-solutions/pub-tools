@@ -4,6 +4,10 @@
 
 `built`. Taken in `fcdc305`.
 
+## Governs
+
+CO-PT-PIPELINE, FL-PT-PUBLISH.
+
 ## Decision
 
 Any response with a `text/html` content type is treated as an error, for both the Last-Modified probe and the download. The code raises a RuntimeError that names the URL and says the file was probably moved or withdrawn.

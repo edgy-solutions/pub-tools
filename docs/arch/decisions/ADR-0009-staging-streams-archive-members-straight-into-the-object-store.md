@@ -4,6 +4,10 @@
 
 `built`. Taken in `28ff07b`.
 
+## Governs
+
+CO-PT-LAKE, FL-PT-PUBLISH.
+
 ## Decision
 
 Staging downloads the archive to a temporary directory. It then copies each CSV member out of the zip directly to the object store, without writing the extracted file to local disk. Local disk holds the compressed archive only.

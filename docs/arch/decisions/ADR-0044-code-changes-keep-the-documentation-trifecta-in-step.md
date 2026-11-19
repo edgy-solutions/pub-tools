@@ -4,6 +4,10 @@
 
 `accepted`. Written in `AGENTS.md:22-27`.
 
+## Governs
+
+No component or flow. It is a rule for work on the repository.
+
 ## Decision
 
 When a core technology changes, `llms.txt`, `.cursorrules` and `README.md` are updated in the same change. The rule is aimed at agents.

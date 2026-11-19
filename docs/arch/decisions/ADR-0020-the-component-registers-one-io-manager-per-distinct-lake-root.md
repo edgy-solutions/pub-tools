@@ -4,6 +4,10 @@
 
 `built`. Taken in `42cb35d`; the per-root rule is at `pub_tools/components/publog_pipeline/component.py:499-514`.
 
+## Governs
+
+CO-PT-PIPELINE.
+
 ## Decision
 
 The component registers its own DuckDB IO manager under `io_manager_key` (default `publog_duckdb_io_manager`). It registers one manager per distinct lake root. The monthly and quarterly sets share one manager when they share a root, and get a second, suffixed key when they do not. Overriding the key points the tables at an IO manager defined elsewhere.

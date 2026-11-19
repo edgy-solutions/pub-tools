@@ -4,6 +4,10 @@
 
 `built`. Taken in `fcdc305`.
 
+## Governs
+
+CO-PT-PIPELINE.
+
 ## Decision
 
 Each asset receives an `as_of_fn` and calls it inside its compute function. The date is not fixed when definitions load. The monthly job uses the first of the current month. The quarterly job uses the first day of the current quarter.

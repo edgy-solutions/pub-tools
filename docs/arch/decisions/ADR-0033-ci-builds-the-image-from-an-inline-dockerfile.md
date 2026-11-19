@@ -4,6 +4,10 @@
 
 `built`. Taken in the first CI commit and extended in `7144e56`.
 
+## Governs
+
+CO-PT-IMAGE.
+
 ## Decision
 
 The workflow writes a Dockerfile inline and builds with it, so the image does not depend on a Dockerfile in the repo. The build exports the locked requirements with `uv export` and installs them with `uv pip`. It runs QEMU and builds for two architectures. It pushes only when the event is not a pull request.

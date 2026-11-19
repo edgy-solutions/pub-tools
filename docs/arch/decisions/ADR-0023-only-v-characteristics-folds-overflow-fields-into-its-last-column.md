@@ -4,6 +4,10 @@
 
 `built`. Taken in `e5612fa`. Not deployed; see ADR-0036.
 
+## Governs
+
+CO-PT-LAKE, FL-PT-PUBLISH.
+
 ## Decision
 
 For tables in `MERGE_OVERFLOW_TABLES`, which holds only `v_characteristics`, the read declares 16 extra VARCHAR columns (`OVERFLOW_COLUMNS = 16`). The last real column, `CLEAR_TEXT_REPLY`, is rebuilt by joining it and the overflow columns with newlines. Every other table still fails loudly on a ragged row.

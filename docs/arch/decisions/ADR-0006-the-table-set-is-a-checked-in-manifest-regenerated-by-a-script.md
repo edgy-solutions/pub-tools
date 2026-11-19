@@ -4,6 +4,10 @@
 
 `built`. Taken in `fcdc305`.
 
+## Governs
+
+CO-PT-PIPELINE, CO-PT-LAKE, FL-PT-PUBLISH.
+
 ## Decision
 
 Dagster needs asset keys at definition time, but a zip's members are only known after download. So the member list for each source file is checked in as `PUBLOG_SOURCE_MANIFEST`. A script, `scripts/discover_manifest.py`, regenerates it by reading each zip's central directory over HTTP Range requests, which fetches a few KiB instead of the whole archive.

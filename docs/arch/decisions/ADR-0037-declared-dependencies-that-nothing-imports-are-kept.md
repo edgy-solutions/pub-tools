@@ -4,6 +4,10 @@
 
 `built`. The declarations are at `pyproject.toml:7-37`. No ruling keeps them, and nothing removes them.
 
+## Governs
+
+CO-PT-IMAGE.
+
 ## Decision
 
 Several packages in `pyproject.toml` are declared and not imported by package code. `dlt[parquet,s3]` is declared at line 11. `s3fs`, `pandas` and `dagster-aws` are declared with comments that say why. Nothing removes them.
