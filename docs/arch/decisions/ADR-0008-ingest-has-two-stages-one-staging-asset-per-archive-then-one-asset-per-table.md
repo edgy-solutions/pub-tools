@@ -4,6 +4,10 @@
 
 `built`. Taken in `28ff07b`, after production bugs the commit describes.
 
+## Governs
+
+CO-PT-PIPELINE, FL-PT-PUBLISH.
+
 ## Decision
 
 Each source archive has one staging asset, which downloads it and writes its CSV members to the lake. Each CSV member then has its own table asset, which depends on the staging asset and converts that one CSV to Parquet.

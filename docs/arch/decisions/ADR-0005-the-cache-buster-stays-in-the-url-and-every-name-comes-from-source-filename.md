@@ -4,6 +4,10 @@
 
 `built`. Taken in `fcdc305`.
 
+## Governs
+
+CO-PT-PIPELINE, FL-PT-PUBLISH.
+
 ## Decision
 
 One quarterly zip link carries a `?ver=` query parameter. The parameter stays in the URL, because the source needs it. Every place that needs a filename, a manifest key or a slug calls `source_filename()`, which drops the query and fragment. Nothing splits the URL on `/` by hand.

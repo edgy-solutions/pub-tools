@@ -4,6 +4,10 @@
 
 `built`. Taken in `28ff07b`.
 
+## Governs
+
+CO-PT-PIPELINE, CO-PT-LAKE, FL-PT-PUBLISH.
+
 ## Decision
 
 Whether to skip work is decided from the lake. Staging compares the source's Last-Modified with a marker object and checks that the staged CSVs still exist. Conversion rebuilds when its Parquet is older than its input CSV. Dagster's materialization history is not consulted.

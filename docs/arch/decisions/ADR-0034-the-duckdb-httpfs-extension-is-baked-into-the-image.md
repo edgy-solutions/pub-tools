@@ -4,6 +4,10 @@
 
 `built`. Taken in `f02dc26`.
 
+## Governs
+
+CO-PT-IMAGE, CO-PT-LAKE.
+
 ## Decision
 
 The image build downloads the httpfs extension and bakes it in. At run time DuckDB loads it from a fixed extension directory and does not fetch it. `scripts/bake_duckdb_extensions.py` does the bake.

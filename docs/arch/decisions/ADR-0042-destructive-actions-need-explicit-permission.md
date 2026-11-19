@@ -4,6 +4,10 @@
 
 `accepted`. Written in `AGENTS.md:13-15`.
 
+## Governs
+
+No component or flow. It is a rule for work on the repository.
+
 ## Decision
 
 An agent may not delete, drop or overwrite lake paths, local database files or raw archives without explicit, verified permission from the user. It may not overwrite the core Dagster definitions or the IO manager wiring without a requested refactor.

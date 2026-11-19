@@ -4,6 +4,10 @@
 
 `built`. Taken in `8fed6c8`; the schedules are built at `pub_tools/components/publog_pipeline/component.py:531-565`.
 
+## Governs
+
+CO-PT-PIPELINE, FL-PT-PUBLISH.
+
 ## Decision
 
 The monthly schedule fires at 14:00 UTC on day 2 of each month. The quarterly schedule fires at the same time in January, April, July and October. Cron strings and the time zone can each be overridden by an environment variable: `PUBLOG_MONTHLY_CRON`, `PUBLOG_QUARTERLY_CRON` and `PUBLOG_SCHEDULE_TZ`.

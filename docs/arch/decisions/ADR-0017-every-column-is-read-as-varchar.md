@@ -4,6 +4,10 @@
 
 `built`. Taken in `28ff07b`.
 
+## Governs
+
+CO-PT-LAKE, FL-PT-PUBLISH.
+
 ## Decision
 
 CSV reads use `all_varchar=true, header=true, null_padding=true`. Every column lands in Parquet as text. Types are not inferred at ingest.

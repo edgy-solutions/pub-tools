@@ -4,6 +4,10 @@
 
 `built`. Taken in `42cb35d`; the defaults are at `pub_tools/components/publog_pipeline/component.py:372-385`.
 
+## Governs
+
+CO-PT-PIPELINE, FL-PT-PUBLISH.
+
 ## Decision
 
 The Parquet codec defaults to zstd. Part files target 128 MB. Any `part_file_size` value makes each table a directory of `data_N.parquet` parts, and null gives a single file.

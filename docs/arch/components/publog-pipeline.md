@@ -1,8 +1,8 @@
 # PUB LOG pipeline component (CO-PT-PIPELINE)
 
-`PublogPipelineComponent` is the Dagster component that turns the public PUB LOG release into lake tables. For each source archive it defines one staging asset, which downloads the archive and stages its CSVs in the object store. For each CSV it defines one table asset, which converts it to Parquet through the dag-tools DuckDB IO manager. It also defines the jobs and schedules that run them, and it registers the IO manager the domain broker reads to advertise the tables to the mesh.
+`PublogPipelineComponent` is the Dagster component that turns the public PUB LOG release into lake tables. For each source archive it defines one staging asset, which downloads the archive and stages its CSVs in the object store. For each CSV it defines one table asset, which converts it to Parquet through the dag-tools DuckDB IO manager. It also defines the jobs and schedules that run them, and it registers the IO manager the domain broker (dag-tools CO-BROKER) reads to advertise the tables to the mesh.
 
-This record covers what the component and its declaration in this repo provide, and what a deployment may set. The staging and conversion code it calls is [the lake library](lake-library.md). The image that runs it is [the pub-tools image](pub-tools-image.md).
+This record covers what the component and its declaration in this repo provide, and what a deployment may set. The staging and conversion code it calls is [CO-PT-LAKE](lake-library.md). The image that runs it is [CO-PT-IMAGE](pub-tools-image.md).
 
 **This record describes; it proposes nothing.** Statuses are those of [the README](../README.md), and line numbers are at the pins listed there. The record shape is provisional.
 
@@ -14,11 +14,24 @@ This record covers what the component and its declaration in this repo provide, 
 4. **Asset keys carry the store's identity.** A table key is `<platform_instance>/<bucket>/<key_prefix>/<table>`, and a staging key is `<platform_instance>/<bucket>/_raw/<slug>`. The instance is derived from the object-store endpoint by a dag-tools helper, and the bucket comes from the lake root. The Dagster key, the catalog URN and the object path are therefore three spellings of one string. A local `file://` lake falls back to `<key_prefix>/<table>` and `<key_prefix>/source/<slug>`. `built`
 5. **Both stages are incremental, and freshness is read from the lake.** Staging skips when the source's `Last-Modified` equals the one recorded in a marker beside the staged files, and every declared CSV is still present. A conversion skips when its Parquet is newer than its staged CSV. Neither stage reads Dagster's event log to decide. `built`
 6. **A skipped step still declares its platform.** A skipped conversion records the IO manager's source type, and a staging step records the object-store platform and its undated prefix. Without this, the catalog sensor would register a skipped run's asset under a different platform, and the catalog would hold two entries for one table. `built`
-7. **The component registers its own IO manager.** It builds a `ConfigurableDuckDBIOManager` from the destination settings and puts it in `Definitions(resources=)`. The table assets write through it. The domain broker finds the tables by reading `physical_coordinates` off that IO manager ([image, finding 3](pub-tools-image.md)). Monthly and quarterly sources share one IO manager when they share a lake root. `built`
+7. **The component registers its own IO manager.** It builds a `ConfigurableDuckDBIOManager` from the destination settings and puts it in `Definitions(resources=)`. The table assets write through it. The domain broker finds the tables by reading `physical_coordinates` off that IO manager ([CO-PT-IMAGE](pub-tools-image.md), finding 3). Monthly and quarterly sources share one IO manager when they share a lake root. `built`
 8. **Tables are replaced in place each run.** A table's path is not dated, so each monthly run overwrites the previous month's Parquet. Dated history survives only as the staged CSVs under `_raw/<slug>/<date>/`. Monthly snapshots would need partitioned assets. The component's docstring calls that "the right way to model it", but no decision records it. `built` (replacement); `proposed` (partitioning)
 9. **Two schedules are defined, and the component sets no default status for them.** The monthly schedule runs at 14:00 UTC on day 2 of each month. The quarterly schedule runs on day 2 of January, April, July and October. Whether they are switched on is left to Dagster's default and to the deployment. `built`
 10. **Concurrency is bounded by memory, not disk.** The component's own sizing note gives each concurrent step about 256 MB of DuckDB plus about 250 MB of Python, with about 300 MB for the parent. If `max_concurrent` is raised without raising the pod's memory limit, the pod is killed and the run is left in a started state with no failure event. `built`. Note: the kill at a 1 Gi limit is reported only in commit `eaa1522`, and the DuckDB cap's saving only in commit `19b778b`; no re-readable result records either.
 11. **The source is read anonymously over HTTPS.** The client sends a fixed user agent. It rejects an HTML page served with status 200, because the source serves its not-found page that way. It reads `Last-Modified` with a streamed GET, because the source's web server refuses HEAD. Tests cover the HTML rejection. `built`
+
+## Connections
+
+One row per connection, read from this component's side. Direction is one of calls, is called by, reads or writes. An id that starts `CO-PT-` is a record here; any other `CO-` id is a dag-tools arch lane record (dag-tools `docs/arch/components/`). Exposures are written out under Gaps; this table only marks them.
+
+| # | Other component | Direction | Protocol | Sign-in | What passes | Evidence | Status |
+|---|---|---|---|---|---|---|---|
+| 1 | none: the public source has no record | reads | HTTPS, a streamed GET | none: anonymous, with a fixed browser user agent | the source archives and their `Last-Modified` | `pub_tools/assets.py:19-23`, `:180-212`; ADR-0002, ADR-0003 | `built` |
+| 2 | [CO-PT-LAKE](lake-library.md) | calls | an in-process Python call | none | the destination settings and the downloaded archive; back, one lazy DuckDB relation per table | `publog_pipeline/component.py:173-222`, `:280-297` | `built` |
+| 3 | CO-MINIO | writes | S3, through the dag-tools DuckDB IO manager | the store key pair from `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`; unset, a well-known development pair (Gaps) | Parquet tables, zstd, part files of up to 128 MB | `publog_pipeline/component.py:566-595`; `publog_instance/component.yaml:7-26`; dag-tools `dag_tools/io_managers/duckdb.py:200-239` | `built` |
+| 4 | CO-DAGSTER | is called by | Dagster's code-location gRPC API, served by [CO-PT-IMAGE](pub-tools-image.md) | none: plain gRPC | the definitions (66 assets, the jobs, two schedules); run requests | `pub_tools/definitions.py:1-7`; invincible-agent `helm/invincible-agent/templates/user-deployments.yaml:93-104` | `built` |
+| 5 | CO-DAGSTER | writes | Dagster's event log, from inside a run | the instance's own storage connection; not established here | materializations carrying the asset key, the declared platform and the row count | `publog_pipeline/component.py:82-98`, `:263-279`; dag-tools `dag_tools/io_managers/duckdb.py:380` | `built` |
+| 6 | CO-BROKER, run by [CO-PT-IMAGE](pub-tools-image.md) | is called by | an in-process import of `pub_tools.definitions:defs` | none | the asset keys and the IO manager's `physical_coordinates`, which at the pin hold the store key pair (present exposure, [CO-PT-IMAGE](pub-tools-image.md) Gaps) | `publog_pipeline/component.py:499-508`; dag-tools `dag_tools/domain_broker/main.py:41-80` | `built` |
 
 ## Settings and defaults
 
@@ -43,7 +56,8 @@ The deployment chart sets the lake root, endpoint, key pair, region and memory c
 ## Not established from code
 
 - Whether the two schedules are running in a given deployment.
-- Where this component sits in the outside reference architectures. The dag-tools arch lane proposes rows L2, P1, S7 and S4 from its alignment records (dag-tools PR #75), read from this repo's description, not its code. S4 applies because the [catalog wiring](catalog-wiring.md) publishes lineage. No record here claims asynchronous publishing to subscribers (S9). `proposed`
+- **Its plane.** Planes are defined once for the mesh, from the NATO model, and held with the mesh's alignment records in dag-tools; each member assigns its components to a plane from that list (the architect's ruling of 2026-11-19). The list is not published, so the plane of every record here is not established.
+- Where this component sits in the outside reference architectures. The dag-tools arch lane proposes rows L2, P1, S7 and S4 from its alignment records (dag-tools PR #75), read from this repo's description, not its code. S4 applies because [CO-PT-CATALOG](catalog-wiring.md) publishes lineage. No record here claims asynchronous publishing to subscribers (S9). `proposed`
 
 ## Sources
 

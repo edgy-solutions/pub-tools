@@ -4,6 +4,10 @@
 
 `built`. Taken in `bf34f5c`, after `033500d` added the sensor and `16c8cfa` replaced it.
 
+## Governs
+
+CO-PT-CATALOG, FL-PT-PUBLISH.
+
 ## Decision
 
 Assets do not emit catalog metadata themselves. The `DatahubLineageComponent` sensor, from dag-tools, registers datasets and lineage. The pub-tools instance only has to expose the right asset keys and physical coordinates.

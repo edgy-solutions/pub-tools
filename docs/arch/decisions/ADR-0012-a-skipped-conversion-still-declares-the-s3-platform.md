@@ -4,6 +4,10 @@
 
 `built`. Taken in `25dabf4`.
 
+## Governs
+
+CO-PT-PIPELINE, CO-PT-CATALOG, FL-PT-PUBLISH.
+
 ## Decision
 
 When a table conversion skips, it returns a `MaterializeResult` and the IO manager never runs. The result still carries `destination_name` set to the IO manager's source type, so the catalog sensor can resolve the s3 platform.

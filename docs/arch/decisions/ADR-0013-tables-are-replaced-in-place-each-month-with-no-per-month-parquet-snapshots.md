@@ -4,6 +4,10 @@
 
 `built`. Taken in `42cb35d`.
 
+## Governs
+
+CO-PT-PIPELINE.
+
 ## Decision
 
 A table's Parquet lives at one path and a monthly run replaces it. The earlier layout wrote a dated directory per month. That is gone. The dated history survives only as the staged CSVs under `_raw/`.

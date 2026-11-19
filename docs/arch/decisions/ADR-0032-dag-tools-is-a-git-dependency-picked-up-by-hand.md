@@ -4,6 +4,10 @@
 
 `built`. Taken in `b4bcd42`; the pin is at `uv.lock:1421-1423`.
 
+## Governs
+
+CO-PT-IMAGE.
+
 ## Decision
 
 pub-tools depends on `edgy-dag-tools` from the dag-tools repo's default branch, through `[tool.uv.sources]`. `uv.lock` pins the exact commit, which is `a99779f`. Direct references are allowed in the build settings. New dag-tools code is picked up by re-locking.

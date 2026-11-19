@@ -4,6 +4,10 @@
 
 `built`. Taken in `74445b8`; the convention is built at `pub_tools/components/publog_pipeline/component.py:62-117`.
 
+## Governs
+
+CO-PT-PIPELINE, CO-PT-CATALOG, CO-PT-IMAGE, FL-PT-PUBLISH.
+
 ## Decision
 
 A table's asset key is `<platform_instance>/<bucket>/<key_prefix>/<table>`. The same segments appear in the catalog dataset name and in the object path, so the three views of one table agree. For a local lake the key is the plain `<key_prefix>/<table>`.

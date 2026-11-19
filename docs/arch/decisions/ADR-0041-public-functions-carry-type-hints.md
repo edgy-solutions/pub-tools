@@ -4,6 +4,10 @@
 
 `accepted`. Written in `.cursorrules:28-31`; compliance is partial.
 
+## Governs
+
+CO-PT-PIPELINE, CO-PT-LAKE.
+
 ## Decision
 
 Python code uses type hints and short docstrings. No type checker runs in CI.

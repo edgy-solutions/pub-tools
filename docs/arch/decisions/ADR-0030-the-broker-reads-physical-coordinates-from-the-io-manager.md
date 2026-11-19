@@ -4,6 +4,10 @@
 
 `built`. Taken in `42cb35d`. This repo registers the IO manager, and the dag-tools broker at the lock's pin reads its coordinates.
 
+## Governs
+
+CO-PT-PIPELINE, CO-PT-IMAGE, FL-PT-PUBLISH.
+
 ## Decision
 
 The domain broker advertises each table by asking the registered IO manager for its physical coordinates. The component therefore registers the IO manager under a key the broker can find, and takes no part in advertising.

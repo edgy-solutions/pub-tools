@@ -4,6 +4,10 @@
 
 `built`. Taken in `d2a3e37` (PR #1); the rule is at `AGENTS.md:29-32`.
 
+## Governs
+
+No component or flow. It is a rule for work on the repository.
+
 ## Decision
 
 Lane packets and handoffs live in `sessions/`, which `.gitignore` excludes at line 17. Nobody commits, pushes or force-adds one. A sender places a packet in the recipient's `sessions/` folder.

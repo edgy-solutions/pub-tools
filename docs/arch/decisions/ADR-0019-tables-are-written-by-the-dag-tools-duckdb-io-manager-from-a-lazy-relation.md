@@ -4,6 +4,10 @@
 
 `built`. Taken in `42cb35d`.
 
+## Governs
+
+CO-PT-PIPELINE, CO-PT-LAKE, FL-PT-PUBLISH.
+
 ## Decision
 
 A table asset returns a lazy DuckDB relation. dag-tools' `ConfigurableDuckDBIOManager` executes it and writes the Parquet. The IO manager owns the lake layout through `asset_uri`. The component does not spell the layout out, and `table_parquet_url` asks the IO manager for the path.

@@ -4,6 +4,10 @@
 
 `built`. Taken in `b128017`.
 
+## Governs
+
+CO-PT-LAKE, FL-PT-PUBLISH.
+
 ## Decision
 
 The raw layout is `_raw/<slug>/<date>/<member>.csv`, with the staging marker `_source.json` under the same dated prefix. The earlier layout put the date first.

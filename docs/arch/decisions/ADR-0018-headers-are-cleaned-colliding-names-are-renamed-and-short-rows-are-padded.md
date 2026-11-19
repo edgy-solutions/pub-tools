@@ -4,6 +4,10 @@
 
 `built`. Taken in `28ff07b`.
 
+## Governs
+
+CO-PT-LAKE, FL-PT-PUBLISH.
+
 ## Decision
 
 Column names are cleaned: stripped, lower-cased, and with spaces, dots, hyphens and slashes turned into underscores. If two cleaned names collide, the later ones get a numeric suffix. Short rows are padded, and the padding is an empty string, not NULL.

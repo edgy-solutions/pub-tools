@@ -4,6 +4,10 @@
 
 `built`. Taken in `8fed6c8`; the function body is at `pub_tools/assets.py:202-211`.
 
+## Governs
+
+CO-PT-PIPELINE, FL-PT-PUBLISH.
+
 ## Decision
 
 To read a source file's Last-Modified header, the code issues a GET with `stream=True` and closes it once the headers arrive. It never sends HEAD. The body is not downloaded.
