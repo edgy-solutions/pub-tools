@@ -60,6 +60,14 @@ One row per connection, read from this component's side. Direction is one of cal
 - Whether the store allows role assumption for the consumer identity the next chart release creates, which the per-read credential path needs in every dag-tools release after the pin.
 - Whether the broker's gateway registration succeeds in a given deployment.
 
+## Place in the mesh
+
+The plane is taken from the mesh's plane list, which is held in the dag-tools records README under "Planes" (dag-tools PR #111, `16da96502281c5496b1553e3ed560c2a10e77ed0`, not yet merged). This member defines no plane of its own. Each component sits in exactly one plane. The placement is `proposed` until the list is merged and the placement is accepted.
+
+| Aspect | What this record shows | Alignment row | Status |
+|---|---|---|---|
+| Plane | `operational-data`: the producer's own deployable unit. It serves [CO-PT-PIPELINE](publog-pipeline.md)'s definitions to CO-DAGSTER and runs this member's CO-BROKER (Connections 1 to 4) | AL-DCRA L2 | `proposed` |
+
 ## Sources
 
 pub-tools paths are at `90fba4acf08ac7c6758ff349636648aac19f71a8`. dag-tools paths are at `a99779fa7075d45a21879c8a057e4cb36a58caf8`. invincible-agent paths are at `6b3e8efdd4a4d2a172fb394ca5338c23413e57bb`.

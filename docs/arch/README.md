@@ -18,6 +18,8 @@ pub-tools turns the public PUB LOG release into Parquet tables in an object-stor
 
 The id names the source, not pub-tools, so another member that reads the same source can cite the same id.
 
+**Planes** come from the mesh's plane list, held in the dag-tools records README (dag-tools PR #111, `16da96502281c5496b1553e3ed560c2a10e77ed0`, not yet merged): `infrastructure`, `operational-data`, `data-management`, `analytical-data`. pub-tools defines none. Each component record names its one plane under "Place in the mesh", as `proposed`.
+
 ## Status vocabulary
 
 The vocabulary is the same as dag-tools `docs/arch/README.md`. Every claim carries exactly one status.
