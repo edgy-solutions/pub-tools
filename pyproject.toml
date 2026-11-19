@@ -72,7 +72,8 @@ dependencies = [
     # fleet moves to. From v0.11.0 the broker presents a service token
     # (MESH_SERVICE_TOKEN_URL, MESH_SERVICE_CLIENT_ID,
     # MESH_SERVICE_CLIENT_SECRET) when it registers. The ticket carries
-    # coordinates, not credentials (dag-tools ADR-0044).
+    # coordinates, not credentials (invincible-agent ADR-0044, carried
+    # out in dag-tools c198373).
     "edgy-dag-tools[broker] @ git+https://github.com/edgy-solutions/dag-tools.git@v0.17.0",
 ]
 

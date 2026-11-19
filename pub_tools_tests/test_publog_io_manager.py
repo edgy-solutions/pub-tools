@@ -206,7 +206,8 @@ def test_s3_config_advertises_a_readable_ticket(monkeypatch):
     # Trailing slash: a consumer's scan_parquet HEADs a slash-less S3 path
     # and 404s.
     assert ticket["physical_uri"] == "s3://publog-lake/publog/p_cage/"
-    # dag-tools ADR-0044: the ticket carries coordinates, not credentials.
+    # invincible-agent ADR-0044 (carried out in dag-tools c198373): the ticket
+    # carries coordinates, not credentials.
     assert "credentials" not in ticket
     assert ticket["endpoint_url"] == "http://minio:9000"
     dumped = json.dumps(ticket, default=str)
