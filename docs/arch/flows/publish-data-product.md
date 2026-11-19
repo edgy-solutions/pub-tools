@@ -35,7 +35,9 @@ The flow has two halves that do not wait for each other. The run and the catalog
 
 ## Gaps
 
-- **Readers receive write credentials** (finding 6). `not built` at the pin.
+- **Present exposure: readers receive write credentials** (finding 6; step 12). Replacing them with a credential minted per read is `not built` at the pin.
+- **Present exposure: route registration and resolution are unauthenticated** (steps 11 and 12). Any caller that reaches the gateway can replace a name's route, and any caller that reaches the broker can resolve a table. Authentication on both is `not built` at the pin.
+- **Present exposure: the catalog entry is written with no credential when the token is absent** (step 8). Requiring the token is `not built`.
 - **A route can point at a table that does not exist yet** (finding 4). Nothing checks that a route's table has been written. `not built`
 - **The sensor-and-broker agreement is tested in dag-tools, not here.** No pub-tools test builds a pub-tools asset's name both ways. `not built`
 - **A failed step is not retried** ([pipeline, finding 3](../components/publog-pipeline.md)), so the catalog entry and the data stay at the last good run until the next run. `not built`
@@ -58,5 +60,7 @@ pub-tools paths are at `90fba4acf08ac7c6758ff349636648aac19f71a8`; `publog_pipel
 | One identity in key, path, catalog name and route | `publog_pipeline/component.py:62-117`; `pub_tools/lake.py:132-156`; dag-tools `dag_tools/domain_broker/main.py:96-130`; dag-tools `dag_tools/components/datahub_lineage/component.py:256-290` | dag-tools `dag_tools_tests/test_broker_physical_urn_identity.py:67`, `:104`; `pub_tools_tests/test_publog_io_manager.py:211` | `built` |
 | Routes for every materializable asset, at start and every 120 seconds | dag-tools `dag_tools/domain_broker/main.py:201-224`, `:278`, `:346-375` | no test in this repo | `built` |
 | Staging entry and lineage to tables | `publog_pipeline/component.py:82-98`, `:483` | no test | `built` |
+| No credential on register or resolve | dag-tools `dag_tools/domain_broker/main.py:327-343`, `:451-468`; dag-tools `dag_tools/central_gateway/main.py:96-110` | no test | `built` |
+| No catalog credential without the token | dag-tools `dag_tools/components/datahub_lineage/component.py:721-728` | no test in this repo | `built` |
 | Reader gets the producer's key pair | dag-tools `dag_tools/io_managers/duckdb.py:465-476`; dag-tools `dag_tools/domain_broker/main.py:451-468` | `pub_tools_tests/test_publog_io_manager.py:185` | `built` |
 | A skipped run still declares its platform | `publog_pipeline/component.py:263-279` | `pub_tools_tests/test_publog_io_manager.py:143` | `built` |
