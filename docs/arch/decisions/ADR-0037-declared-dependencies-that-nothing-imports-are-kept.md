@@ -2,7 +2,7 @@
 
 ## Status
 
-`accepted`. Held by habit and never ruled on; the declarations are at `pyproject.toml:7-37`.
+`built`. The declarations are at `pyproject.toml:7-37`. No ruling keeps them, and nothing removes them.
 
 ## Decision
 
@@ -23,5 +23,5 @@ pub-tools paths are at `90fba4acf08ac7c6758ff349636648aac19f71a8`.
 | Claim | Source | Test | Status |
 |---|---|---|---|
 | dlt is declared and not imported | `pyproject.toml:11`; searched `pub_tools/`, `scripts/`, `example/` | no test | `built` |
-| Reasons are given for DuckDB, s3fs, pandas and dagster-aws | `pyproject.toml:13-37` | no test | `accepted` |
+| Reasons are given for DuckDB, s3fs, pandas and dagster-aws | `pyproject.toml:13-37` | no test | `built` |
 | No reason is given for dlt, dagster-cloud or dagster-postgres | commits `e9d15fb`, `a6504fa` | no test | `built` |

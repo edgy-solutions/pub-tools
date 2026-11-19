@@ -2,7 +2,7 @@
 
 ## Status
 
-`accepted`. Written in `.cursorrules:9-16` and `README.md:44`; no check enforces it.
+`built`. The lock and the CI build use uv. The rule is written in `.cursorrules:9-16` and `README.md:44`, and no check enforces it.
 
 ## Decision
 

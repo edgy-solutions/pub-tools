@@ -31,15 +31,15 @@ These records come from a census of the decisions in this repo, each checked aga
 - [ADR-0027: Catalog registration happens through the sensor only](ADR-0027-catalog-registration-happens-through-the-sensor-only.md) **built**
 - [ADR-0028: The lineage sensor defaults to RUNNING](ADR-0028-the-lineage-sensor-defaults-to-running.md) **built**
 - [ADR-0029: One image runs both the webserver and the code server, with two startups](ADR-0029-one-image-runs-both-the-webserver-and-the-code-server-with-two-startups.md) **built**
-- [ADR-0030: The broker reads physical coordinates from the IO manager](ADR-0030-the-broker-reads-physical-coordinates-from-the-io-manager.md) **accepted**
+- [ADR-0030: The broker reads physical coordinates from the IO manager](ADR-0030-the-broker-reads-physical-coordinates-from-the-io-manager.md) **built**
 - [ADR-0031: The pub-tools name is reserved for real pipelines](ADR-0031-the-pub-tools-name-is-reserved-for-real-pipelines.md) **accepted**
 - [ADR-0032: dag-tools is a git dependency, picked up by hand](ADR-0032-dag-tools-is-a-git-dependency-picked-up-by-hand.md) **built**
 - [ADR-0033: CI builds the image from an inline Dockerfile](ADR-0033-ci-builds-the-image-from-an-inline-dockerfile.md) **built**
 - [ADR-0034: The DuckDB httpfs extension is baked into the image](ADR-0034-the-duckdb-httpfs-extension-is-baked-into-the-image.md) **built**
-- [ADR-0035: Concurrency is bounded by memory: four runs, a DuckDB memory limit, a pod limit](ADR-0035-concurrency-is-bounded-by-memory-four-runs-a-duckdb-memory-limit-a-pod-limit.md) **accepted**
+- [ADR-0035: Concurrency is bounded by memory: four runs, a DuckDB memory limit, a pod limit](ADR-0035-concurrency-is-bounded-by-memory-four-runs-a-duckdb-memory-limit-a-pod-limit.md) **built**
 - [ADR-0036: The deployed build is held back from the master of this repo](ADR-0036-the-deployed-build-is-held-back-from-the-master-of-this-repo.md) **accepted**
-- [ADR-0037: Declared dependencies that nothing imports are kept](ADR-0037-declared-dependencies-that-nothing-imports-are-kept.md) **accepted**
-- [ADR-0038: uv is the only package tool](ADR-0038-uv-is-the-only-package-tool.md) **accepted**
+- [ADR-0037: Declared dependencies that nothing imports are kept](ADR-0037-declared-dependencies-that-nothing-imports-are-kept.md) **built**
+- [ADR-0038: uv is the only package tool](ADR-0038-uv-is-the-only-package-tool.md) **built**
 - [ADR-0039: Workflows are Dagster-only; the code still calls requests directly](ADR-0039-workflows-are-dagster-only-the-code-still-calls-requests-directly.md) **accepted**
 - [ADR-0040: The agent-facing docs describe data movement and must match the code](ADR-0040-the-agent-facing-docs-describe-data-movement-and-must-match-the-code.md) **accepted**
 - [ADR-0041: Public functions carry type hints](ADR-0041-public-functions-carry-type-hints.md) **accepted**
