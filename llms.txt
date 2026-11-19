@@ -12,7 +12,7 @@ This document gives high-level context to AI tools and agents exploring this rep
 dlt is not used. The component's `dest_config` keeps a dlt-style shape only for configuration.
 
 ## Infrastructure
-The destination is an S3-compatible Parquet lake (`PUBLOG_S3_BUCKET_URL`, default `s3://publog-lake`). Each table is a directory of Parquet parts at `<lake_root>/<key_prefix>/<table>.parquet/`, replaced in place on each run. Asset keys are `<platform_instance>/<bucket>/<key_prefix>/<table>`, and DataHub uses the same names, so changing a key changes a dataset's identity.
+The destination is an S3-compatible Parquet lake (`PUBLOG_S3_BUCKET_URL`; its default is in `pub_tools/components/publog_instance/component.yaml`). Each table is a directory of Parquet parts at `<lake_root>/<key_prefix>/<table>.parquet/`, replaced in place on each run. Asset keys are `<platform_instance>/<bucket>/<key_prefix>/<table>`, and DataHub uses the same names, so changing a key changes a dataset's identity.
 
 ## Local Execution
 ```bash
