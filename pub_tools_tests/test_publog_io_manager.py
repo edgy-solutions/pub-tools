@@ -11,6 +11,7 @@ that used to be local concerns into a contract worth pinning:
   * skipping is expressed by returning MaterializeResult, since Dagster
     only calls handle_output for a real output value.
 """
+import json
 import pathlib
 
 import pytest
@@ -188,8 +189,8 @@ def test_s3_config_advertises_a_readable_ticket(monkeypatch):
         monkeypatch,
     )
     component.dest_config["credentials"] = {
-        "aws_access_key_id": "key",
-        "aws_secret_access_key": "secret",
+        "aws_access_key_id": "test-access-key-0001",
+        "aws_secret_access_key": "test-secret-value-0002",
         "endpoint_url": "http://minio:9000",
     }
     defs = component.build_defs(None)
@@ -205,7 +206,13 @@ def test_s3_config_advertises_a_readable_ticket(monkeypatch):
     # Trailing slash: a consumer's scan_parquet HEADs a slash-less S3 path
     # and 404s.
     assert ticket["physical_uri"] == "s3://publog-lake/publog/p_cage/"
-    assert ticket["credentials"]["aws_endpoint_url"] == "http://minio:9000"
+    # invincible-agent ADR-0044 (carried out in dag-tools c198373): the ticket
+    # carries coordinates, not credentials.
+    assert "credentials" not in ticket
+    assert ticket["endpoint_url"] == "http://minio:9000"
+    dumped = json.dumps(ticket, default=str)
+    assert "test-access-key-0001" not in dumped
+    assert "test-secret-value-0002" not in dumped
 
 
 def test_s3_asset_keys_carry_instance_and_bucket(monkeypatch):
