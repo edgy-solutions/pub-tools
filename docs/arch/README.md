@@ -41,3 +41,4 @@ The deployed image is not built from the pub-tools pin. See [docs/cluster-build.
 | [components/lake-library.md](components/lake-library.md) | component: staging and conversion library | draft |
 | [components/catalog-wiring.md](components/catalog-wiring.md) | component: the catalog sensor declaration | draft |
 | [components/pub-tools-image.md](components/pub-tools-image.md) | component: the image, run as a code location and as a broker | draft |
+| [flows/publish-data-product.md](flows/publish-data-product.md) | flow: one table from the source to its catalog entry and mesh route | draft |
