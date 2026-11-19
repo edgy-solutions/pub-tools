@@ -12,7 +12,7 @@ The sizing is written intent. Nothing in this repo checks that four runs fit in 
 
 ## Why
 
-`eaa1522` cut concurrency from 6 to 4 after an out-of-memory kill at a 1 Gi limit, which left a run stuck in STARTED for about 8 hours. `19b778b` added `DUCKDB_MEMORY_LIMIT`. Its message records a measured case on 5M rows: a 256MB cap cut peak resident memory from 434MB to 136MB for about 6% more wall time. The same numbers are in the code comment at `pub_tools/lake.py:78-84` and in the chart.
+`eaa1522` cut concurrency from 6 to 4 after an out-of-memory kill at a 1 Gi limit, which left a run stuck in STARTED for about 8 hours. `19b778b` added `DUCKDB_MEMORY_LIMIT`. Its message reports a case on 5M rows: a 256MB cap cut peak resident memory from 434MB to 136MB for about 6% more wall time. The same numbers are in the code comment at `pub_tools/lake.py:78-84` and in the chart.
 
 ## Consequences
 
@@ -26,6 +26,6 @@ pub-tools paths are at `90fba4acf08ac7c6758ff349636648aac19f71a8`.
 |---|---|---|---|
 | max_concurrent defaults to 4 | `pub_tools/components/publog_pipeline/component.py:387-400`; `pub_tools/components/publog_instance/component.yaml:17` | no test | `built` |
 | The memory limit comes from the environment | `pub_tools/components/publog_pipeline/component.py:589`; `pub_tools/lake.py:78-96` | `test_lake.py:125` and `test_lake.py:138` memory limit tests | `built` |
-| A 256MB cap cut peak resident memory from 434MB to 136MB at about 6% more wall time | commit `19b778b` message; `pub_tools/lake.py:78-84` | no test | `measured` |
+| A 256MB cap cut peak resident memory from 434MB to 136MB at about 6% more wall time | commit `19b778b` message; `pub_tools/lake.py:78-84` | no test | `built` (note: the run is reported only in the source cited; no re-readable result records it) |
 | Concurrency was cut from 6 to 4 after an out-of-memory kill | commit `eaa1522` message | no test | `built` |
 | The pod limit and sizing | invincible-agent `6b3e8efd`, `helm/invincible-agent/values.yaml:1235-1257` | no test | `built` |
