@@ -46,6 +46,14 @@ One row per connection, read from this component's side. Direction is one of cal
 
 - How many staged copies under the old layout remain in a given deployment's store.
 
+## Place in the mesh
+
+The plane is taken from the mesh's plane list, which is held in the dag-tools records README under "Planes" (dag-tools PR #111, `16da96502281c5496b1553e3ed560c2a10e77ed0`, not yet merged). This member defines no plane of its own. Each component sits in exactly one plane. The placement is `proposed` until the list is merged and the placement is accepted.
+
+| Aspect | What this record shows | Alignment row | Status |
+|---|---|---|---|
+| Plane | `operational-data`: it runs only inside [CO-PT-PIPELINE](publog-pipeline.md), in process (Connections 1), and is placed with it | AL-DCRA L2 | `proposed` |
+
 ## Sources
 
 pub-tools paths are at `90fba4acf08ac7c6758ff349636648aac19f71a8`.

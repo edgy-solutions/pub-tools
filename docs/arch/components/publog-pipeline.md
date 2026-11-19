@@ -56,8 +56,16 @@ The deployment chart sets the lake root, endpoint, key pair, region and memory c
 ## Not established from code
 
 - Whether the two schedules are running in a given deployment.
-- **Its plane.** Planes are defined once for the mesh, from the NATO model, and held with the mesh's alignment records in dag-tools; each member assigns its components to a plane from that list (the architect's ruling of 2026-11-19). The list is not published, so the plane of every record here is not established.
+- **Whether the plane list is final.** Planes are defined once for the mesh and held in dag-tools; each member places its components from that list (the architect's ruling of 2026-11-19). The list is published in dag-tools PR #111, `16da96502281c5496b1553e3ed560c2a10e77ed0`, not yet merged, and every record here is placed from it under Place in the mesh, as `proposed`. Until it merges, whether the list is final is not established.
 - Where this component sits in the outside reference architectures. The dag-tools arch lane proposes the alignment rows AL-DCRA L2 and AL-DMRA P1, S7 and S4 (dag-tools PR #75), read from this repo's description, not its code. AL-DMRA S4 applies because [CO-PT-CATALOG](catalog-wiring.md) publishes lineage. No record here claims asynchronous publishing to subscribers (AL-DMRA S9). `proposed`
+
+## Place in the mesh
+
+The plane is taken from the mesh's plane list, which is held in the dag-tools records README under "Planes" (dag-tools PR #111, `16da96502281c5496b1553e3ed560c2a10e77ed0`, not yet merged). This member defines no plane of its own. Each component sits in exactly one plane. The placement is `proposed` until the list is merged and the placement is accepted.
+
+| Aspect | What this record shows | Alignment row | Status |
+|---|---|---|---|
+| Plane | `operational-data`: where a producer's data enters the mesh. It reads XE-PUBLOG and writes the tables that a consumer reaches through CO-BROKER (Connections 1, 3 and 6) | AL-DCRA L2 | `proposed` |
 
 ## Sources
 
