@@ -43,7 +43,7 @@ The deployment chart sets the lake root, endpoint, key pair, region and memory c
 ## Not established from code
 
 - Whether the two schedules are running in a given deployment.
-- Where this component sits in the outside reference architectures. The dag-tools alignment records assign planes and services, and they do not yet name pub-tools.
+- Where this component sits in the outside reference architectures. The dag-tools arch lane proposes rows L2, P1, S7 and S4 from its alignment records (dag-tools PR #75), read from this repo's description, not its code. S4 applies because the [catalog wiring](catalog-wiring.md) publishes lineage. No record here claims asynchronous publishing to subscribers (S9). `proposed`
 
 ## Sources
 
