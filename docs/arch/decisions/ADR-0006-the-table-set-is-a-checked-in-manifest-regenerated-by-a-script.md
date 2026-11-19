@@ -27,7 +27,7 @@ pub-tools paths are at `90fba4acf08ac7c6758ff349636648aac19f71a8`.
 | Claim | Source | Test | Status |
 |---|---|---|---|
 | The manifest is checked in and keyed by source filename | `pub_tools/assets.py:62-145` | `test_assets.py:88` test_every_configured_url_has_a_manifest_entry; `test_assets.py:93` test_manifest_tables_unknown_source_names_the_fix | `built` |
-| The manifest counts match what a production run extracted | `pub_tools_tests/test_assets.py:108-127` (docstring: counts observed in a real production run); commit `fcdc305` | `test_assets.py:108` test_manifest_matches_observed_extraction_counts | `measured` |
+| The manifest counts match what a production run extracted | `pub_tools_tests/test_assets.py:108-127` (docstring: counts observed in a real production run); commit `fcdc305` | `test_assets.py:108` test_manifest_matches_observed_extraction_counts | `built` (note: the run is reported only in the source cited; no re-readable result records it) |
 | The script reads the central directory over Range requests | `scripts/discover_manifest.py:1-14` | no test | `built` |
 | Staging warns on a declared member missing from the archive | `pub_tools/components/publog_pipeline/component.py:186-192` | no test | `built` |
 | Staging warns on an archive member the manifest does not declare | `pub_tools/lake.py:332-341` | `test_lake.py:200` test_stage_zip_streams_declared_members_only | `built` |

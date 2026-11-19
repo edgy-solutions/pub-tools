@@ -25,7 +25,7 @@ pub-tools paths are at `90fba4acf08ac7c6758ff349636648aac19f71a8`.
 | Claim | Source | Test | Status |
 |---|---|---|---|
 | Conversion is DuckDB SQL over object storage | `pub_tools/lake.py:609-626` | `test_publog_io_manager.py:73` test_table_lands_where_the_io_manager_owns | `built` |
-| dlt ran at 22-27k rows/s and P_CAGE (4.16M rows) took 150 s | commit `28ff07b` message | no test | `measured` |
+| dlt ran at 22-27k rows/s and P_CAGE (4.16M rows) took 150 s | commit `28ff07b` message | no test | `built` (note: the run is reported only in the source cited; no re-readable result records it) |
 | No dlt feature was in use | commit `28ff07b` message | no test | `built` |
 | dlt is not imported in the package or scripts | searched `pub_tools/`, `scripts/` and `example/` at the pin | no test | `built` |
 | The dlt dependency is still declared | `pyproject.toml:11` | no test | `built` |

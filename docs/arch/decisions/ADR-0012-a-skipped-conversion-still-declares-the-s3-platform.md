@@ -25,4 +25,4 @@ pub-tools paths are at `90fba4acf08ac7c6758ff349636648aac19f71a8`.
 | Claim | Source | Test | Status |
 |---|---|---|---|
 | The skip result carries destination_name | `pub_tools/components/publog_pipeline/component.py:266-281` | `test_publog_io_manager.py:143` test_rerun_skips_without_rewriting (checks skipped_reason only) | `built` |
-| Before the fix, one table appeared under both s3 and unknown in a deployment | commit `25dabf4` message | no test | `measured` |
+| Before the fix, one table appeared under both s3 and unknown in a deployment | commit `25dabf4` message | no test | `built` (note: the run is reported only in the source cited; no re-readable result records it) |

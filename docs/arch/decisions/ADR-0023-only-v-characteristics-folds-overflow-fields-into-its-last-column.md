@@ -27,4 +27,4 @@ pub-tools paths are at `90fba4acf08ac7c6758ff349636648aac19f71a8`.
 | The overflow merge applies to one table only | `pub_tools/lake.py:477-491` | `test_lake.py:471` test_csv_to_parquet_merge_overflow_folds_ragged_rows | `built` |
 | Other tables still raise on a ragged row | `pub_tools/lake.py:553-570` | `test_lake.py:522` test_csv_to_parquet_without_merge_overflow_still_raises_on_ragged_rows | `built` |
 | The relation path used in production agrees with the COPY path | `pub_tools/lake.py:609-626` | `test_lake.py:535` test_csv_relation_merge_overflow_matches_csv_to_parquet | `built` |
-| 12 of 44.6M rows were ragged | commit `e5612fa` message | no test | `measured` |
+| 12 of 44.6M rows were ragged | commit `e5612fa` message | no test | `built` (note: the run is reported only in the source cited; no re-readable result records it) |

@@ -28,4 +28,4 @@ pub-tools paths are at `90fba4acf08ac7c6758ff349636648aac19f71a8`.
 |---|---|---|---|
 | Staging decides from a marker and the staged objects | `pub_tools/components/publog_pipeline/component.py:143-171` | `test_lake.py:259` test_marker_roundtrip_and_missing; `test_lake.py:266` test_read_marker_tolerates_corruption | `built` |
 | Conversion decides from object times | `pub_tools/components/publog_pipeline/component.py:255-262` | `test_publog_io_manager.py:143` test_rerun_skips_without_rewriting | `built` |
-| The event-log call returns wiped events inside a run (dagster 1.13.7) | commit `28ff07b` message; comment `pub_tools/lake.py:158-163`; no run record in the repo | no test | `measured` |
+| The event-log call returns wiped events inside a run (dagster 1.13.7) | commit `28ff07b` message; comment `pub_tools/lake.py:158-163`; no run record in the repo | no test | `built` (note: the run is reported only in the source cited; no re-readable result records it) |
