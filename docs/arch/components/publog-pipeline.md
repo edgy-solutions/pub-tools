@@ -30,7 +30,7 @@ One row per connection, read from this component's side. Direction is one of cal
 | 2 | [CO-PT-LAKE](lake-library.md) | calls | an in-process Python call | none | the destination settings and the downloaded archive; back, one lazy DuckDB relation per table | `publog_pipeline/component.py:173-222`, `:280-297` | `built` |
 | 3 | CO-MINIO | writes | S3, through the dag-tools DuckDB IO manager | the store key pair from `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`; unset, a well-known development pair (Gaps) | Parquet tables, zstd, part files of up to 128 MB | `publog_pipeline/component.py:566-595`; `publog_instance/component.yaml:7-26`; dag-tools `dag_tools/io_managers/duckdb.py:200-239` | `built` |
 | 4 | CO-DAGSTER | is called by | Dagster's code-location gRPC API, served by [CO-PT-IMAGE](pub-tools-image.md) | none: plain gRPC | the definitions (66 assets, the jobs, two schedules); run requests | `pub_tools/definitions.py:1-7`; invincible-agent `helm/invincible-agent/templates/user-deployments.yaml:93-104` | `built` |
-| 5 | CO-DAGSTER | writes | Dagster's event log, from inside a run | the instance's own storage connection; not established here | materializations carrying the asset key, the declared platform and the row count | `publog_pipeline/component.py:82-98`, `:263-279`; dag-tools `dag_tools/io_managers/duckdb.py:380` | `built` |
+| 5 | CO-DAGSTER | writes | Dagster's event log, from inside a run | the instance's own storage connection, which this repo does not set (Not established) | materializations carrying the asset key, the declared platform and the row count | `publog_pipeline/component.py:82-98`, `:263-279`; dag-tools `dag_tools/io_managers/duckdb.py:380` | `built` |
 | 6 | CO-BROKER | is called by | an in-process import of `pub_tools.definitions:defs` | none | run by [CO-PT-IMAGE](pub-tools-image.md): the asset keys and the IO manager's `physical_coordinates`, which at the pin hold the store key pair (present exposure, [CO-PT-IMAGE](pub-tools-image.md) Gaps) | `publog_pipeline/component.py:499-508`; dag-tools `dag_tools/domain_broker/main.py:41-80` | `built` |
 
 ## Settings and defaults
@@ -58,6 +58,7 @@ The deployment chart sets the lake root, endpoint, key pair, region and memory c
 - Whether the two schedules are running in a given deployment.
 - **Whether the plane list is final.** Planes are defined once for the mesh and held in dag-tools; each member places its components from that list (the architect's ruling of 2026-11-19). The list is published in dag-tools PR #111, `16da96502281c5496b1553e3ed560c2a10e77ed0`, not yet merged, and every record here is placed from it under Place in the mesh, as `proposed`. Until it merges, whether the list is final is not established.
 - Where this component sits in the outside reference architectures. The dag-tools arch lane proposes the alignment rows AL-DCRA L2 and AL-DMRA P1, S7 and S4 (dag-tools PR #75), read from this repo's description, not its code. AL-DMRA S4 applies because [CO-PT-CATALOG](catalog-wiring.md) publishes lineage. No record here claims asynchronous publishing to subscribers (AL-DMRA S9). `proposed`
+- How the Dagster instance's storage connection signs in, in a given deployment. The deployment sets it, not this repo.
 
 ## Place in the mesh
 
