@@ -31,8 +31,8 @@ One row per connection, read from this component's side. Direction is one of cal
 
 ## Gaps
 
-- **Present exposure: the sensor writes to the catalog with no credential when the token is absent** (finding 4). That succeeds only against a catalog that accepts unauthenticated writes, and nothing in pub-tools refuses to start without the token. If the catalog requires one, the sensor's calls fail at run time instead. Requiring the token is `not built`.
-- **No test in this repo covers the declaration.** Its behaviour is tested, if at all, in dag-tools. `not built`
+- **Present exposure: the sensor writes to the catalog with no credential when the token is absent** (finding 4). That succeeds only against a catalog that accepts unauthenticated writes, and nothing in pub-tools refuses to start without the token. If the catalog requires one, the sensor's calls fail at run time instead. Requiring the token is not built. `built`: dag-tools `dag_tools/components/datahub_lineage/component.py:721-728`; invincible-agent `helm/invincible-agent/templates/user-deployments.yaml:133-143`.
+- **No test in this repo covers the declaration.** Its behaviour is tested, if at all, in dag-tools. `built`: `pub_tools/components/datahub_lineage/component.yaml:1-28`; the catalog-name test, `pub_tools_tests/test_publog_io_manager.py:211`, `:235`, builds names, not the declaration.
 
 ## Not established from code
 
