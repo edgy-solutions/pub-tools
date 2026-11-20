@@ -18,7 +18,7 @@ One row per connection, read from this component's side. Direction is one of cal
 
 | # | Other component | Direction | Protocol | Sign-in | What passes | Evidence | Status |
 |---|---|---|---|---|---|---|---|
-| 1 | CO-DAGSTER | reads | Dagster's instance API, in the sensor's evaluation | the instance's own storage connection; not established here | this code location's materializations: asset key, declared platform, job and run | dag-tools `dag_tools/components/datahub_lineage/component.py:256-290`, `:467` | `built` |
+| 1 | CO-DAGSTER | reads | Dagster's instance API, in the sensor's evaluation | the instance's own storage connection, which this repo does not set (Not established) | this code location's materializations: asset key, declared platform, job and run | dag-tools `dag_tools/components/datahub_lineage/component.py:256-290`, `:467` | `built` |
 | 2 | CO-DATAHUB | writes | HTTP, to the metadata service at `DATAHUB_GMS_URL` | `DATAHUB_TOKEN` when set; none when unset (present exposure, Gaps) | datasets, the job and run, and lineage from each staging asset to its tables | `pub_tools/components/datahub_lineage/component.yaml:21-23`; dag-tools `dag_tools/components/datahub_lineage/component.py:235`, `:657`, `:721-728` | `built` |
 
 ## Settings and defaults
@@ -31,13 +31,14 @@ One row per connection, read from this component's side. Direction is one of cal
 
 ## Gaps
 
-- **Present exposure: the sensor writes to the catalog with no credential when the token is absent** (finding 4). That succeeds only against a catalog that accepts unauthenticated writes, and nothing in pub-tools refuses to start without the token. If the catalog requires one, the sensor's calls fail at run time instead. Requiring the token is not built. `built`: dag-tools `dag_tools/components/datahub_lineage/component.py:721-728`; invincible-agent `helm/invincible-agent/templates/user-deployments.yaml:133-143`.
+- **Present exposure: the sensor writes to the catalog with no credential when the token is absent** (finding 4). That succeeds only against a catalog that accepts unauthenticated writes, and nothing in pub-tools refuses to start without the token. If the catalog requires one, the sensor's calls fail at run time instead. Nothing at the pin requires the token. `built`: dag-tools `dag_tools/components/datahub_lineage/component.py:721-728`; invincible-agent `helm/invincible-agent/templates/user-deployments.yaml:133-143`.
 - **No test in this repo covers the declaration.** Its behaviour is tested, if at all, in dag-tools. `built`: `pub_tools/components/datahub_lineage/component.yaml:1-28`; the catalog-name test, `pub_tools_tests/test_publog_io_manager.py:211`, `:235`, builds names, not the declaration.
 
 ## Not established from code
 
 - Whether the catalog service in a given deployment runs with authentication on, so whether the token is required there.
 - Whether the token secret exists in a given deployment.
+- How the Dagster instance's storage connection signs in, in a given deployment. The deployment sets it, not this repo.
 
 ## Place in the mesh
 
