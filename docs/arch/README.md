@@ -33,7 +33,7 @@ The vocabulary is the same as dag-tools `docs/arch/README.md`. Every claim carri
 
 A run reported only in a commit message, a docstring or a code comment is not `measured`; the claim is `built`, with a note citing where the run is reported. This is the architect's ruling of 2026-11-19. A later ruling the same day adds that `measured` is relative to the claim: an in-process CI run may measure a claim about the code's behaviour, citing the run and saying "in CI, in process", but not a claim about a deployed service or a real backend, which stays `built`. pub-tools' CI runs no tests, so no claim here is measured that way. The status vocabulary is the architect's; a lane proposes changes to it, and does not make them.
 
-A gap with nothing built is written `not built`. A gap that exposes something now, in code at the pin, is called a **present exposure**. A fact that code, charts and tests do not establish is written **not established**, and is listed at the end of its record.
+A gap carries exactly one status: that of the condition it states, at the pin. That is `built` when code at the pin shows the condition, cited by path and lines; a condition that is an absence cites where the thing would be. What would close a gap, if not built, is said in plain words and is not a second status. A gap that exposes something now, in code at the pin, is called a **present exposure**. A fact that code, charts and tests do not establish is written **not established**, and is listed at the end of its record.
 
 ## Pins
 

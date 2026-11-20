@@ -49,8 +49,8 @@ The deployment chart sets the lake root, endpoint, key pair, region and memory c
 ## Gaps
 
 - **Unset credentials fall back to a well-known development pair** rather than failing. A deployment that forgets them writes, or fails to write, as that identity. `built`
-- **No retry policy** (finding 3). `not built`
-- **No monthly snapshots** (finding 8). `proposed`
+- **No retry policy** (finding 3). `built`: the assets are declared with none, `publog_pipeline/component.py:453-492`.
+- **No monthly snapshots** (finding 8). Partitioning to bring them back is proposed in the component's docstring, `publog_pipeline/component.py:316-322`. `built`: tables are replaced in place, the same lines.
 - **The component's docstring still describes the old staging layout** `_raw/<as_of>/<slug>/` and a `.parquet` table suffix. The code does neither. `built` (the code); the docstring is stale.
 
 ## Not established from code
@@ -80,7 +80,8 @@ pub-tools paths are at `90fba4acf08ac7c6758ff349636648aac19f71a8`. Component pat
 | Incremental staging and conversion; freshness from the lake | `publog_pipeline/component.py:124-222`, `:225-297`; `pub_tools/lake.py:158-257` | `pub_tools_tests/test_publog_io_manager.py:143`; `pub_tools_tests/test_lake.py:259`, `:266`, `:276` | `built` |
 | Skipped steps declare their platform | `publog_pipeline/component.py:82-98`, `:263-279` | no test | `built` |
 | The component registers its IO manager; shared per lake root | `publog_pipeline/component.py:499-508`, `:566-595` | `pub_tools_tests/test_publog_io_manager.py:173` | `built` |
-| Tables replaced in place; partitioning named as the right model | `publog_pipeline/component.py:316-322` | no test | `built`; `proposed` |
+| Tables replaced in place | `publog_pipeline/component.py:316-322` | no test | `built` |
+| Partitioning named as the right model | `publog_pipeline/component.py:316-322`, a docstring | no test | `proposed` |
 | Two schedules, no default status set | `publog_pipeline/component.py:402-410`, `:531-538`, `:558-565` | no test | `built` |
 | Memory sizing and the incident | `publog_pipeline/component.py:387-400`; invincible-agent `helm/invincible-agent/values.yaml:1237-1257`; commits `eaa1522`, `19b778b` | no test | `built`; the incident is reported in commits only |
 | Anonymous HTTPS; error page rejected; GET for `Last-Modified` | `pub_tools/assets.py:19-23`, `:180-212` | `pub_tools_tests/test_assets.py:132`, `:140`, `:146` | `built` |

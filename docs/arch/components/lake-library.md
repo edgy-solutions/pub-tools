@@ -39,7 +39,7 @@ One row per connection, read from this component's side. Direction is one of cal
 ## Gaps
 
 - **Dated history is kept only for staged CSVs, not for tables** ([CO-PT-PIPELINE](publog-pipeline.md), finding 8). `built`
-- **Nothing removes staged copies under an older layout.** A prefix staged before the slug-before-date order remains unless someone deletes it. `not built`
+- **Nothing removes staged copies under an older layout.** A prefix staged before the slug-before-date order remains unless someone deletes it. `built`: staging writes and never deletes, `pub_tools/lake.py:259-344`; the layout is `pub_tools/lake.py:99-131`.
 - **The module docstring describes `csv_to_parquet` as the conversion step** (finding 9). `built` (the code); the docstring is stale.
 
 ## Not established from code
